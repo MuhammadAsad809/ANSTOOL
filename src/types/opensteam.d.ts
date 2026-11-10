@@ -57,6 +57,8 @@ export interface OpenSteamAPI {
   getProcessStatus: () => Promise<ProcessStatus>;
   killSteamProcesses: () => Promise<boolean>;
   restartSteam: (noBrowser?: boolean) => Promise<boolean>;
+  launchSteamInstall: (appId: string | number) => Promise<boolean>;
+  launchSteamRun: (appId: string | number) => Promise<boolean>;
 
   // Patching
   patchSteam: (mode: number) => Promise<{ success: boolean; message: string }>;

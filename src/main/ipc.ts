@@ -1,4 +1,4 @@
-import { ipcMain, dialog, BrowserWindow } from "electron";
+import { ipcMain, dialog, BrowserWindow, shell } from "electron";
 import { SteamService } from "./services/steamService";
 import { GameService } from "./services/gameService";
 import { LuaService } from "./services/luaService";
@@ -46,6 +46,32 @@ export function registerAllIpcHandlers(
     const res = await steamService.restartSteam(noBrowser);
     broadcastLog(win, res ? "success" : "error", res ? "Steam relaunch command dispatched." : "Failed to restart Steam.");
     return res;
+  });
+
+  ipcMain.handle("steam:install-game", async (event, appId: string | number) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    broadcastLog(win, "info", `Triggering Steam native installer for AppID ${appId}...`);
+    try {
+      await shell.openExternal(`steam://install/${appId}`);
+      broadcastLog(win, "success", `Dispatched steam://install/${appId} to Steam client.`);
+      return true;
+    } catch (err: any) {
+      broadcastLog(win, "error", `Failed to dispatch steam://install/${appId}: ${err.message}`);
+      return false;
+    }
+  });
+
+  ipcMain.handle("steam:run-game", async (event, appId: string | number) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    broadcastLog(win, "info", `Triggering Steam run for AppID ${appId}...`);
+    try {
+      await shell.openExternal(`steam://run/${appId}`);
+      broadcastLog(win, "success", `Dispatched steam://run/${appId} to Steam client.`);
+      return true;
+    } catch (err: any) {
+      broadcastLog(win, "error", `Failed to dispatch steam://run/${appId}: ${err.message}`);
+      return false;
+    }
   });
 
   // Patching

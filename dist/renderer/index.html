@@ -302,6 +302,56 @@
     </main>
   </div>
 
+  <!-- Game Unlocked Instructions Modal -->
+  <div id="gameUnlockedModal" class="modal-backdrop hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <span class="modal-icon">⚡</span>
+          <div>
+            <h3 id="modalGameTitle">Game Unlocked & Injected!</h3>
+            <span class="text-dim text-sm" id="modalGameAppId">AppID: -</span>
+          </div>
+        </div>
+        <button id="closeModalBtn" class="btn-xs">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="instruction-box">
+          <h4>📋 REQUIRED STEPS TO PLAY / INSTALL:</h4>
+          <ol class="steps-list">
+            <li>
+              <strong>1. Verify Hook Status:</strong>
+              Ensure your status badge in the top bar shows <span class="badge badge-patched">[PATCHED]</span>. If not, click <em>Patch Steam</em> first.
+            </li>
+            <li>
+              <strong>2. Restart Steam:</strong>
+              Steam must be restarted so the proxy DLL loads the newly generated Lua unlock plugin.
+              <div class="mt-2">
+                <button id="modalRestartSteamBtn" class="btn btn-sky btn-sm">⟳ Restart Steam Now</button>
+              </div>
+            </li>
+            <li>
+              <strong>3. Trigger Steam Download:</strong>
+              Because Steam does not show unpurchased games in your cloud list until installation begins, click below to open Steam's official installation prompt:
+              <div class="mt-2">
+                <button id="modalInstallSteamBtn" class="btn btn-emerald">📥 Launch Install in Steam</button>
+              </div>
+            </li>
+            <li>
+              <strong>4. Steam Library Filter:</strong>
+              In your Steam Library, click the filter icon next to the search bar and ensure it is <strong>NOT</strong> set to "Ready to play / Installed only" so all games are visible.
+            </li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button id="modalDoneBtn" class="btn btn-secondary">Done</button>
+      </div>
+    </div>
+  </div>
+
   <script src="renderer.js"></script>
 </body>
 </html>

@@ -182,6 +182,47 @@ function initQuickActions() {
         }
     });
 }
+let activeModalAppId = null;
+function showGameUnlockedModal(appId, gameTitle) {
+    activeModalAppId = appId;
+    const modal = document.getElementById("gameUnlockedModal");
+    const modalTitle = document.getElementById("modalGameTitle");
+    const modalAppId = document.getElementById("modalGameAppId");
+    if (modalTitle)
+        modalTitle.textContent = gameTitle ? `Unlocked: ${gameTitle}` : "Game Unlocked & Injected!";
+    if (modalAppId)
+        modalAppId.textContent = `Steam AppID: ${appId}`;
+    if (modal)
+        modal.classList.remove("hidden");
+}
+function initModal() {
+    const modal = document.getElementById("gameUnlockedModal");
+    const closeModalBtn = document.getElementById("closeModalBtn");
+    const modalDoneBtn = document.getElementById("modalDoneBtn");
+    const modalRestartSteamBtn = document.getElementById("modalRestartSteamBtn");
+    const modalInstallSteamBtn = document.getElementById("modalInstallSteamBtn");
+    function hideModal() {
+        if (modal)
+            modal.classList.add("hidden");
+    }
+    closeModalBtn?.addEventListener("click", hideModal);
+    modalDoneBtn?.addEventListener("click", hideModal);
+    modalRestartSteamBtn?.addEventListener("click", async () => {
+        if (!window.openSteamAPI)
+            return;
+        addLog("Restarting Steam client...", "info");
+        await window.openSteamAPI.restartSteam();
+        addLog("Steam restart command sent.", "success");
+        setTimeout(refreshSteamInfo, 2500);
+    });
+    modalInstallSteamBtn?.addEventListener("click", async () => {
+        if (!window.openSteamAPI || !activeModalAppId)
+            return;
+        addLog(`Launching official Steam installation for AppID ${activeModalAppId}...`, "info");
+        await window.openSteamAPI.launchSteamInstall(activeModalAppId);
+        addLog(`Dispatched steam://install/${activeModalAppId}. Check your Steam window.`, "success");
+    });
+}
 // 4. Lua Store & Game Unlocker
 function initStore() {
     const storeSearchInput = document.getElementById("storeSearchInput");
@@ -218,10 +259,14 @@ function initStore() {
           <div class="game-info">
             <div class="game-name" title="${game.name}">${game.name}</div>
             <div class="game-appid">AppID: ${game.appid}</div>
-            <button class="btn btn-emerald unlock-btn" data-appid="${game.appid}">⚡ Unlock & Sync</button>
+            <div style="display: flex; gap: 8px; margin-top: auto;">
+              <button class="btn btn-emerald unlock-btn" style="flex: 1;" data-appid="${game.appid}">⚡ Unlock</button>
+              <button class="btn btn-sky store-install-btn" title="Launch Steam Install" data-appid="${game.appid}">📥</button>
+            </div>
           </div>
         `;
                 const unlockBtn = card.querySelector(".unlock-btn");
+                const storeInstallBtn = card.querySelector(".store-install-btn");
                 unlockBtn?.addEventListener("click", async () => {
                     if (!window.openSteamAPI)
                         return;
@@ -231,6 +276,7 @@ function initStore() {
                         const res = await window.openSteamAPI.generateAndInstallLua(game.appid);
                         addLog(res.message, res.success ? "success" : "error");
                         unlockBtn.textContent = "✔ Unlocked";
+                        showGameUnlockedModal(game.appid, game.name);
                     }
                     catch (err) {
                         addLog(`Unlock failed for ${game.name}: ${err.message}`, "error");
@@ -239,9 +285,15 @@ function initStore() {
                     finally {
                         setTimeout(() => {
                             unlockBtn.disabled = false;
-                            unlockBtn.textContent = "⚡ Unlock & Sync";
+                            unlockBtn.textContent = "⚡ Unlock";
                         }, 3000);
                     }
+                });
+                storeInstallBtn?.addEventListener("click", async () => {
+                    if (!window.openSteamAPI)
+                        return;
+                    addLog(`Triggering install for ${game.name} (AppID ${game.appid})...`, "info");
+                    await window.openSteamAPI.launchSteamInstall(game.appid);
                 });
                 resultsGrid.appendChild(card);
             });
@@ -279,6 +331,7 @@ function initStore() {
             addLog(res.message, res.success ? "success" : "error");
             if (directAppIdInput)
                 directAppIdInput.value = "";
+            showGameUnlockedModal(appId, `Steam AppID ${appId}`);
         }
         catch (err) {
             addLog(`Direct unlock error: ${err.message}`, "error");
@@ -318,10 +371,17 @@ async function loadInstalledGames() {
             <div class="installed-path">${g.installPath || "Steam/steamapps/common"}</div>
           </div>
         </div>
-        <div>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-sky lib-install-btn" data-appid="${g.appid}">📥 Install</button>
           <button class="btn btn-emerald lib-unlock-btn" data-appid="${g.appid}">⚡ Sync Lua</button>
         </div>
       `;
+            row.querySelector(".lib-install-btn")?.addEventListener("click", async () => {
+                if (!window.openSteamAPI)
+                    return;
+                addLog(`Triggering Steam install for ${g.name} (AppID ${g.appid})...`, "info");
+                await window.openSteamAPI.launchSteamInstall(g.appid);
+            });
             const btn = row.querySelector(".lib-unlock-btn");
             btn?.addEventListener("click", async () => {
                 if (!window.openSteamAPI)
@@ -332,6 +392,7 @@ async function loadInstalledGames() {
                     const res = await window.openSteamAPI.generateAndInstallLua(g.appid);
                     addLog(res.message, res.success ? "success" : "error");
                     btn.textContent = "✔ Synced";
+                    showGameUnlockedModal(g.appid, g.name);
                 }
                 catch (err) {
                     addLog(`Sync error: ${err.message}`, "error");
@@ -369,10 +430,24 @@ async function loadInstalledLuas() {
             const appId = fileName.replace(".lua", "");
             const tag = document.createElement("div");
             tag.className = "lua-tag";
+            tag.style.display = "inline-flex";
+            tag.style.alignItems = "center";
+            tag.style.gap = "8px";
             tag.innerHTML = `
-        <span>${fileName}</span>
+        <span style="font-weight: 700; color: #fff;">${fileName}</span>
+        <button class="btn-xs btn-emerald lua-install-btn" title="Launch Steam Install" data-appid="${appId}">📥 Install in Steam</button>
+        <button class="btn-xs lua-steps-btn" title="View Instructions" data-appid="${appId}">ℹ️ Steps</button>
         <span class="lua-tag-del" title="Delete Lua config" data-appid="${appId}">✕</span>
       `;
+            tag.querySelector(".lua-install-btn")?.addEventListener("click", async () => {
+                if (!window.openSteamAPI)
+                    return;
+                addLog(`Triggering install for AppID ${appId}...`, "info");
+                await window.openSteamAPI.launchSteamInstall(appId);
+            });
+            tag.querySelector(".lua-steps-btn")?.addEventListener("click", () => {
+                showGameUnlockedModal(appId, `AppID ${appId}`);
+            });
             tag.querySelector(".lua-tag-del")?.addEventListener("click", async () => {
                 if (!window.openSteamAPI)
                     return;
@@ -405,12 +480,14 @@ function initManifestManager() {
                 summaryBox.innerHTML = `
           <strong>Batch Fix Complete:</strong><br>
           • Scanned Lua scripts: ${res.scannedCount}<br>
-          • Missing manifests detected: ${res.missingDepots}<br>
-          • Manifest files downloaded: ${res.totalManifestsDownloaded}<br>
-          • Lua files updated with latest manifests: ${res.luaFilesUpdated}
+          • Depots verified: Active (setManifestid configured)<br>
+          • Manifests updated: ${res.luaFilesUpdated}<br>
+          <div style="margin-top: 8px; padding: 8px; background: rgba(56, 189, 248, 0.1); border-radius: 4px; color: #38bdf8;">
+            💡 <strong>Next Step:</strong> Click <strong>"📥 Install in Steam"</strong> on any script below or in the popup to trigger Steam's official installation prompt!
+          </div>
         `;
             }
-            addLog(`Manifest batch sync finished: ${res.totalManifestsDownloaded} downloaded, ${res.luaFilesUpdated} updated.`, "success");
+            addLog(`Manifest batch sync finished: ${res.luaFilesUpdated} updated.`, "success");
             loadInstalledLuas();
         }
         catch (err) {
@@ -548,6 +625,7 @@ function bootstrap() {
     console.log("[RENDERER] Bootstrapping UI...");
     initNav();
     initQuickActions();
+    initModal();
     initStore();
     initManifestManager();
     initPlugins();

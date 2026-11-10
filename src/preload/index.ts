@@ -18,6 +18,12 @@ const openSteamAPI: OpenSteamAPI = {
   restartSteam: (noBrowser: boolean = false): Promise<boolean> => {
     return ipcRenderer.invoke("steam:restart", noBrowser);
   },
+  launchSteamInstall: (appId: string | number): Promise<boolean> => {
+    return ipcRenderer.invoke("steam:install-game", appId);
+  },
+  launchSteamRun: (appId: string | number): Promise<boolean> => {
+    return ipcRenderer.invoke("steam:run-game", appId);
+  },
 
   // Patching
   patchSteam: (mode: number): Promise<{ success: boolean; message: string }> => {

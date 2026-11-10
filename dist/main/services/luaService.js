@@ -221,11 +221,12 @@ class LuaService {
             lines.push(...manifestEntries);
         }
         fs.writeFileSync(targetLuaPath, lines.join("\n") + "\n", "utf-8");
+        const totalBindings = manifestEntries.length;
         return {
             success: true,
             luaPath: targetLuaPath,
-            manifestsCount,
-            message: `Successfully installed Lua script and synced ${manifestsCount} manifest(s) for AppID ${appId}!`
+            manifestsCount: totalBindings,
+            message: `Successfully generated Lua unlock with ${totalBindings} depot manifest binding(s) for AppID ${appId}!`
         };
     }
     async fixAllManifests() {
@@ -249,19 +250,11 @@ class LuaService {
             const fullPath = path.join(luaFolder, f);
             const content = fs.readFileSync(fullPath, "utf-8");
             luaData.set(appId, { path: fullPath, content });
+            const hasManifestBindings = content.includes("setManifestid");
             const depotIdMatches = Array.from(content.matchAll(/addappid\((\d+)/g)).map((m) => m[1]);
-            let hasMissing = false;
-            for (const dId of depotIdMatches) {
-                if (dId === appId)
-                    continue;
-                const exists = fs.readdirSync(depotCache).some((mf) => mf.startsWith(`${dId}_`) && mf.endsWith(".manifest"));
-                if (!exists) {
-                    hasMissing = true;
-                    missingDepotsCount++;
-                }
-            }
-            if (hasMissing || depotIdMatches.length === 0) {
+            if (!hasManifestBindings || depotIdMatches.length === 0) {
                 needsUpdateIds.push(appId);
+                missingDepotsCount += depotIdMatches.length > 0 ? depotIdMatches.length - 1 : 1;
             }
         }
         if (needsUpdateIds.length === 0) {

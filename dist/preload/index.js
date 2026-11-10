@@ -18,6 +18,12 @@ const openSteamAPI = {
     restartSteam: (noBrowser = false) => {
         return electron_1.ipcRenderer.invoke("steam:restart", noBrowser);
     },
+    launchSteamInstall: (appId) => {
+        return electron_1.ipcRenderer.invoke("steam:install-game", appId);
+    },
+    launchSteamRun: (appId) => {
+        return electron_1.ipcRenderer.invoke("steam:run-game", appId);
+    },
     // Patching
     patchSteam: (mode) => {
         return electron_1.ipcRenderer.invoke("steam:patch", mode);

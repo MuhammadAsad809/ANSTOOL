@@ -5,6 +5,9 @@ on:
     branches: [ master, main ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-windows:
     runs-on: windows-latest
@@ -37,3 +40,21 @@ jobs:
           path: |
             release/*.exe
             release/*.blockmap
+
+      - name: Publish to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.0
+          name: "ANSTOOL v1.0.0 - Official Release"
+          body: |
+            ### ⚡ ANSTOOL v1.0.0 Release
+            - Added Game Unlocked Interactive Instruction Checklist & Modal
+            - Added One-Click "Install in Steam" Protocol Launcher (`steam://install/<AppID>`)
+            - Real-time Steam Hook & Process Control
+            - Fast native registry queries and manifest bindings
+          draft: false
+          prerelease: false
+          files: |
+            release/*.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
