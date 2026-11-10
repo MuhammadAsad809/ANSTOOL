@@ -1,0 +1,54 @@
+{
+  "name": "anstool-desktop",
+  "version": "1.0.0",
+  "description": "ANSTOOL - Steam Management & Optimization Desktop Application",
+  "main": "dist/main/index.js",
+  "scripts": {
+    "build:main": "node ./node_modules/typescript/bin/tsc -p tsconfig.main.json",
+    "build:preload": "node ./node_modules/typescript/bin/tsc -p tsconfig.preload.json",
+    "build:renderer": "node ./node_modules/typescript/bin/tsc -p tsconfig.renderer.json",
+    "build": "npm run build:main && npm run build:preload && npm run build:renderer && mkdir -p dist/renderer && cp -f src/renderer/index.html src/renderer/style.css dist/renderer/",
+    "start": "electron .",
+    "dev": "npm run build && electron .",
+    "dist:win": "electron-builder --win --x64"
+  },
+  "build": {
+    "appId": "com.anstool.desktop",
+    "productName": "ANSTOOL",
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "keywords": [
+    "electron",
+    "desktop",
+    "steam",
+    "anstool"
+  ],
+  "author": "MuhammadAsad809",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@types/adm-zip": "^0.5.8",
+    "adm-zip": "^0.6.1"
+  }
+}
