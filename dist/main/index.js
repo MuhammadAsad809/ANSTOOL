@@ -64,6 +64,14 @@ function createWindow() {
         }
     });
     mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
+    mainWindow.webContents.on("before-input-event", (_event, input) => {
+        if (input.key === "F12" || (input.control && input.shift && input.key.toLowerCase() === "i")) {
+            mainWindow?.webContents.toggleDevTools();
+        }
+    });
+    mainWindow.webContents.on("did-fail-load", (_event, errorCode, errorDescription) => {
+        console.error(`[MAIN] Failed to load renderer: ${errorCode} - ${errorDescription}`);
+    });
     mainWindow.on("closed", () => {
         mainWindow = null;
     });

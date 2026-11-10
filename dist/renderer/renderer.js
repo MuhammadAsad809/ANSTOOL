@@ -1,3 +1,5 @@
+"use strict";
+// OpenSteam Desktop Client Script
 function addLog(message, level = "info") {
     const container = document.getElementById("logConsoleOutput");
     if (!container)
@@ -47,11 +49,29 @@ function initNav() {
 }
 // 2. Steam State & Path
 async function refreshSteamInfo() {
+    const hookBadge = document.getElementById("hookStatusBadge");
+    const procBadge = document.getElementById("processStatusBadge");
+    const banner = document.getElementById("ipcErrorBanner");
+    if (!window.openSteamAPI) {
+        if (banner)
+            banner.classList.remove("hidden");
+        if (hookBadge) {
+            hookBadge.className = "badge badge-unpatched";
+            hookBadge.textContent = "IPC ERROR";
+        }
+        if (procBadge) {
+            procBadge.className = "badge badge-inactive";
+            procBadge.textContent = "DISCONNECTED";
+        }
+        addLog("Preload IPC bridge not found. openSteamAPI is undefined.", "error");
+        return null;
+    }
+    if (banner)
+        banner.classList.add("hidden");
     try {
         const info = await window.openSteamAPI.getSteamPathInfo();
         const proc = await window.openSteamAPI.getProcessStatus();
         // Badges
-        const hookBadge = document.getElementById("hookStatusBadge");
         if (hookBadge) {
             if (info.isPatched) {
                 hookBadge.className = "badge badge-patched";
@@ -62,7 +82,6 @@ async function refreshSteamInfo() {
                 hookBadge.textContent = "[NOT PATCHED]";
             }
         }
-        const procBadge = document.getElementById("processStatusBadge");
         if (procBadge) {
             if (proc.steamRunning) {
                 procBadge.className = "badge badge-active";
@@ -109,6 +128,8 @@ function initQuickActions() {
     const patchMode0Btn = document.getElementById("patchMode0Btn");
     const changePathBtn = document.getElementById("changePathBtn");
     async function handlePatch(mode) {
+        if (!window.openSteamAPI)
+            return;
         try {
             addLog(`Initiating Steam patch (Mode ${mode})...`, "info");
             const res = await window.openSteamAPI.patchSteam(mode);
@@ -120,6 +141,8 @@ function initQuickActions() {
         }
     }
     async function handleUnpatch() {
+        if (!window.openSteamAPI)
+            return;
         try {
             addLog("Initiating Steam unpatch...", "info");
             const res = await window.openSteamAPI.unpatchSteam();
@@ -135,16 +158,22 @@ function initQuickActions() {
     patchMode0Btn?.addEventListener("click", () => handlePatch(0));
     quickUnpatchBtn?.addEventListener("click", handleUnpatch);
     quickRestartBtn?.addEventListener("click", async () => {
+        if (!window.openSteamAPI)
+            return;
         addLog("Restarting Steam client...", "info");
         await window.openSteamAPI.restartSteam();
         setTimeout(refreshSteamInfo, 2500);
     });
     quickKillBtn?.addEventListener("click", async () => {
+        if (!window.openSteamAPI)
+            return;
         addLog("Stopping all Steam processes...", "info");
         await window.openSteamAPI.killSteamProcesses();
         setTimeout(refreshSteamInfo, 1000);
     });
     changePathBtn?.addEventListener("click", async () => {
+        if (!window.openSteamAPI)
+            return;
         const selected = await window.openSteamAPI.selectDirectory();
         if (selected) {
             addLog(`Setting custom Steam path: ${selected}`, "info");
@@ -163,6 +192,8 @@ function initStore() {
     const resultsGrid = document.getElementById("storeResultsGrid");
     const loading = document.getElementById("catalogLoading");
     async function performSearch() {
+        if (!window.openSteamAPI)
+            return;
         const query = storeSearchInput?.value.trim() || "";
         if (loading)
             loading.classList.remove("hidden");
@@ -174,8 +205,8 @@ function initStore() {
                 loading.classList.add("hidden");
             if (!resultsGrid)
                 return;
-            if (games.length === 0) {
-                resultsGrid.innerHTML = `<div class="loading-state">No games found matching "${query}". Try searching by AppID.</div>`;
+            if (!games || games.length === 0) {
+                resultsGrid.innerHTML = `<div class="loading-state">No games found matching "${query}". Try searching by numeric AppID.</div>`;
                 return;
             }
             games.forEach((game) => {
@@ -192,6 +223,8 @@ function initStore() {
         `;
                 const unlockBtn = card.querySelector(".unlock-btn");
                 unlockBtn?.addEventListener("click", async () => {
+                    if (!window.openSteamAPI)
+                        return;
                     unlockBtn.disabled = true;
                     unlockBtn.textContent = "Syncing...";
                     try {
@@ -225,12 +258,16 @@ function initStore() {
             performSearch();
     });
     storeSyncCatalogBtn?.addEventListener("click", async () => {
+        if (!window.openSteamAPI)
+            return;
         addLog("Updating local game catalog cache...", "info");
         const res = await window.openSteamAPI.syncCatalog();
         addLog(`Catalog synchronized with ${res.totalGames} entries.`, res.success ? "success" : "error");
         performSearch();
     });
     directUnlockBtn?.addEventListener("click", async () => {
+        if (!window.openSteamAPI)
+            return;
         const appId = directAppIdInput?.value.trim();
         if (!appId) {
             addLog("Please enter a valid Steam AppID.", "warn");
@@ -247,7 +284,7 @@ function initStore() {
             addLog(`Direct unlock error: ${err.message}`, "error");
         }
     });
-    // Initial populate with default popular catalog items
+    // Initial populate
     performSearch();
 }
 // 5. Installed Games Library
@@ -256,12 +293,16 @@ async function loadInstalledGames() {
     const countText = document.getElementById("libraryCountText");
     if (!container)
         return;
+    if (!window.openSteamAPI) {
+        container.innerHTML = `<div class="loading-state error">IPC API bridge unavailable.</div>`;
+        return;
+    }
     container.innerHTML = `<div class="loading-state">Scanning local Steam library folders...</div>`;
     try {
         const games = await window.openSteamAPI.getInstalledGames();
         if (countText)
             countText.textContent = `${games.length} games installed`;
-        if (games.length === 0) {
+        if (!games || games.length === 0) {
             container.innerHTML = `<div class="loading-state">No installed Steam games detected in default library paths.</div>`;
             return;
         }
@@ -283,6 +324,8 @@ async function loadInstalledGames() {
       `;
             const btn = row.querySelector(".lib-unlock-btn");
             btn?.addEventListener("click", async () => {
+                if (!window.openSteamAPI)
+                    return;
                 btn.disabled = true;
                 btn.textContent = "Syncing...";
                 try {
@@ -313,9 +356,11 @@ async function loadInstalledLuas() {
     const container = document.getElementById("installedLuasContainer");
     if (!container)
         return;
+    if (!window.openSteamAPI)
+        return;
     try {
         const luas = await window.openSteamAPI.listInstalledLuas();
-        if (luas.length === 0) {
+        if (!luas || luas.length === 0) {
             container.innerHTML = `<span class="text-dim">No Lua scripts currently installed in Steam plugin directory.</span>`;
             return;
         }
@@ -329,6 +374,8 @@ async function loadInstalledLuas() {
         <span class="lua-tag-del" title="Delete Lua config" data-appid="${appId}">✕</span>
       `;
             tag.querySelector(".lua-tag-del")?.addEventListener("click", async () => {
+                if (!window.openSteamAPI)
+                    return;
                 const ok = await window.openSteamAPI.removeLua(appId);
                 if (ok) {
                     addLog(`Removed ${fileName}`, "info");
@@ -346,6 +393,8 @@ function initManifestManager() {
     const batchBtn = document.getElementById("batchFixManifestsBtn");
     const summaryBox = document.getElementById("manifestFixSummary");
     batchBtn?.addEventListener("click", async () => {
+        if (!window.openSteamAPI)
+            return;
         if (batchBtn)
             batchBtn.disabled = true;
         addLog("Beginning batch manifest scan and synchronization...", "info");
@@ -378,11 +427,15 @@ function initPlugins() {
     const installMillenniumBtn = document.getElementById("installMillenniumBtn");
     const installLuaManagerBtn = document.getElementById("installLuaManagerBtn");
     installMillenniumBtn?.addEventListener("click", async () => {
+        if (!window.openSteamAPI)
+            return;
         addLog("Downloading Millennium installer...", "info");
         const res = await window.openSteamAPI.installMillennium();
         addLog(res.message, res.success ? "success" : "error");
     });
     installLuaManagerBtn?.addEventListener("click", async () => {
+        if (!window.openSteamAPI)
+            return;
         addLog("Downloading and installing LuaManager plugin...", "info");
         const res = await window.openSteamAPI.installLuaManager();
         addLog(res.message, res.success ? "success" : "error");
@@ -396,12 +449,16 @@ function initOnlineFix() {
     const ofBrowsePathBtn = document.getElementById("ofBrowsePathBtn");
     const ofDeployBtn = document.getElementById("ofDeployBtn");
     ofBrowsePathBtn?.addEventListener("click", async () => {
+        if (!window.openSteamAPI)
+            return;
         const dir = await window.openSteamAPI.selectDirectory();
         if (dir && ofGamePath) {
             ofGamePath.value = dir;
         }
     });
     ofDeployBtn?.addEventListener("click", async () => {
+        if (!window.openSteamAPI)
+            return;
         const game = ofGameName?.value.trim() || "";
         const pathVal = ofGamePath?.value.trim() || "";
         const pass = ofPassword?.value.trim() || "online-fix.me";
@@ -428,6 +485,8 @@ function initManualLua() {
     const selectFileBtn = document.getElementById("selectLuaFileBtn");
     const dropZone = document.getElementById("luaDropZone");
     async function handleImport(filePath) {
+        if (!window.openSteamAPI)
+            return;
         addLog(`Importing manual Lua file: ${filePath}`, "info");
         try {
             const res = await window.openSteamAPI.importManualLua(filePath);
@@ -439,6 +498,8 @@ function initManualLua() {
         }
     }
     selectFileBtn?.addEventListener("click", async () => {
+        if (!window.openSteamAPI)
+            return;
         const file = await window.openSteamAPI.selectFile(["lua"]);
         if (file)
             handleImport(file);
@@ -456,7 +517,6 @@ function initManualLua() {
         if (e.dataTransfer && e.dataTransfer.files.length > 0) {
             const file = e.dataTransfer.files[0];
             if (file.name.endsWith(".lua")) {
-                // In electron with context isolation, file path is available
                 const filePath = file.path;
                 if (filePath)
                     handleImport(filePath);
@@ -477,12 +537,15 @@ function initConsole() {
         addLog("Console log cleared.", "info");
     });
     // Listen to IPC backend logs
-    window.openSteamAPI.onLog((data) => {
-        addLog(data.message, data.level);
-    });
+    if (window.openSteamAPI?.onLog) {
+        window.openSteamAPI.onLog((data) => {
+            addLog(data.message, data.level);
+        });
+    }
 }
 // Bootstrap
-window.addEventListener("DOMContentLoaded", () => {
+function bootstrap() {
+    console.log("[RENDERER] Bootstrapping UI...");
     initNav();
     initQuickActions();
     initStore();
@@ -495,5 +558,10 @@ window.addEventListener("DOMContentLoaded", () => {
     refreshSteamInfo();
     // Poll Steam state every 5 seconds
     setInterval(refreshSteamInfo, 5000);
-});
-export {};
+}
+if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", bootstrap);
+}
+else {
+    bootstrap();
+}

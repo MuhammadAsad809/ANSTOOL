@@ -90,6 +90,11 @@ export interface OpenSteamAPI {
 }
 
 declare global {
+  type OpenSteamGame = SteamGame;
+  type OpenSteamPathInfo = SteamPathInfo;
+  type OpenSteamProcessStatus = ProcessStatus;
+  type OpenSteamFixManifestsResult = FixManifestsResult;
+
   interface Window {
     openSteamAPI: OpenSteamAPI;
   }

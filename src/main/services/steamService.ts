@@ -40,31 +40,38 @@ export class SteamService {
     const platform = os.platform();
 
     if (platform === "win32") {
-      // 1. Try Windows Registry via PowerShell
-      try {
-        const { stdout } = await execAsync(
-          'powershell -NoProfile -Command "(Get-ItemProperty -Path \'HKCU:\\Software\\Valve\\Steam\' -ErrorAction SilentlyContinue).SteamPath"'
-        );
-        const regPath = stdout.trim().replace(/\//g, "\\");
-        if (regPath && fs.existsSync(regPath)) {
-          return regPath;
-        }
-      } catch {
-        // Fallback
-      }
+      // 1. Fast check for standard install directories (instant, 0ms)
+      const progFiles86 = process.env["ProgramFiles(x86)"] || "C:\\Program Files (x86)";
+      const progFiles = process.env["ProgramFiles"] || "C:\\Program Files";
 
-      // 2. Standard Windows Default Paths
       const defaultPaths = [
-        "C:\\Program Files (x86)\\Steam",
-        "C:\\Program Files\\Steam",
+        path.join(progFiles86, "Steam"),
+        path.join(progFiles, "Steam"),
         "D:\\Steam",
-        "E:\\Steam"
+        "E:\\Steam",
+        "C:\\Steam"
       ];
 
       for (const p of defaultPaths) {
         if (fs.existsSync(p)) return p;
       }
-      return "C:\\Program Files (x86)\\Steam";
+
+      // 2. Query Windows Registry via native reg.exe (fast, <10ms)
+      try {
+        const { stdout } = await execAsync(
+          'reg query "HKCU\\Software\\Valve\\Steam" /v SteamPath',
+          { timeout: 1500 }
+        );
+        const match = stdout.match(/SteamPath\s+REG_SZ\s+(.*)/i);
+        if (match && match[1]) {
+          const regPath = match[1].trim().replace(/\//g, "\\");
+          if (fs.existsSync(regPath)) {
+            return regPath;
+          }
+        }
+      } catch {}
+
+      return path.join(progFiles86, "Steam");
     } else {
       // Linux / macOS / Unix environments (including Wine / Proton / flatpak)
       const home = os.homedir();
@@ -79,51 +86,62 @@ export class SteamService {
         if (fs.existsSync(p)) return p;
       }
 
-      // Return default location even if not yet created
       return path.join(home, ".local/share/Steam");
     }
   }
 
   public async getSteamPathInfo(): Promise<SteamPathInfo> {
-    const steamPath = await this.getSteamPath();
-    const exists = fs.existsSync(steamPath);
-    const injectedFiles: string[] = [];
+    try {
+      const steamPath = await this.getSteamPath();
+      const exists = fs.existsSync(steamPath);
+      const injectedFiles: string[] = [];
 
-    if (exists) {
-      for (const dll of KNOWN_INJECTED_DLLS) {
-        if (fs.existsSync(path.join(steamPath, dll))) {
-          injectedFiles.push(dll);
+      if (exists) {
+        for (const dll of KNOWN_INJECTED_DLLS) {
+          if (fs.existsSync(path.join(steamPath, dll))) {
+            injectedFiles.push(dll);
+          }
         }
       }
+
+      const isPatched = injectedFiles.length > 0;
+      const luaPath = path.join(steamPath, "config", this.luaFolderName);
+      const depotCachePath = path.join(steamPath, "depotcache");
+
+      return {
+        path: steamPath,
+        isDefault: !this.customPath,
+        exists,
+        isPatched,
+        injectedFiles,
+        luaPath,
+        depotCachePath
+      };
+    } catch (err: any) {
+      return {
+        path: "C:\\Program Files (x86)\\Steam",
+        isDefault: true,
+        exists: false,
+        isPatched: false,
+        injectedFiles: [],
+        luaPath: "",
+        depotCachePath: ""
+      };
     }
-
-    const isPatched = injectedFiles.length > 0;
-    const luaPath = path.join(steamPath, "config", this.luaFolderName);
-    const depotCachePath = path.join(steamPath, "depotcache");
-
-    return {
-      path: steamPath,
-      isDefault: !this.customPath,
-      exists,
-      isPatched,
-      injectedFiles,
-      luaPath,
-      depotCachePath
-    };
   }
 
   public async getProcessStatus(): Promise<ProcessStatus> {
     const platform = os.platform();
     try {
       if (platform === "win32") {
-        const { stdout } = await execAsync("tasklist /FI \"IMAGENAME eq steam.exe\" /NH");
-        const helperRes = await execAsync("tasklist /FI \"IMAGENAME eq steamwebhelper.exe\" /NH");
+        const { stdout } = await execAsync('tasklist /FI "IMAGENAME eq steam.exe" /NH', { timeout: 2000 });
+        const isSteamRunning = stdout.toLowerCase().includes("steam.exe");
         return {
-          steamRunning: stdout.toLowerCase().includes("steam.exe"),
-          helperRunning: helperRes.stdout.toLowerCase().includes("steamwebhelper.exe")
+          steamRunning: isSteamRunning,
+          helperRunning: isSteamRunning
         };
       } else {
-        const { stdout } = await execAsync("pgrep -f steam || true");
+        const { stdout } = await execAsync("pgrep -f steam || true", { timeout: 1500 });
         const isRunning = stdout.trim().length > 0;
         return {
           steamRunning: isRunning,

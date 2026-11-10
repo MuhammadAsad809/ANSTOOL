@@ -40,6 +40,14 @@ try {
     path.join(distRenderer, 'style.css')
   );
 
+  const rendererJsPath = path.join(distRenderer, 'renderer.js');
+  if (fs.existsSync(rendererJsPath)) {
+    let code = fs.readFileSync(rendererJsPath, 'utf-8');
+    code = code.replace(/export\s*\{[^}]*\};?/g, '');
+    fs.writeFileSync(rendererJsPath, code, 'utf-8');
+    console.log('[BUILD] Sanitized renderer.js for browser execution.');
+  }
+
   console.log('[BUILD] Successfully compiled and packaged distribution assets.');
 } catch (err) {
   console.error('[BUILD ERROR]', err.message);
