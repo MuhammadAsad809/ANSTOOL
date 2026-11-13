@@ -23,6 +23,9 @@ const openSteamAPI: OpenSteamAPI = {
   restartSteam: (noBrowser: boolean = false): Promise<boolean> => {
     return ipcRenderer.invoke("steam:restart", noBrowser);
   },
+  startSteam: (): Promise<boolean> => {
+    return ipcRenderer.invoke("steam:start");
+  },
   launchSteamInstall: (appId: string | number): Promise<boolean> => {
     return ipcRenderer.invoke("steam:install-game", appId);
   },
@@ -61,6 +64,9 @@ const openSteamAPI: OpenSteamAPI = {
   },
   listInstalledLuas: (): Promise<string[]> => {
     return ipcRenderer.invoke("lua:list-installed");
+  },
+  getInstalledLuasWithNames: (): Promise<Array<{ appId: string; name: string }>> => {
+    return ipcRenderer.invoke("lua:list-installed-with-names");
   },
   removeLua: (appId: string): Promise<boolean> => {
     return ipcRenderer.invoke("lua:remove", appId);

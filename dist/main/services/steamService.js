@@ -69,7 +69,31 @@ class SteamService {
         }
         const platform = os.platform();
         if (platform === "win32") {
-            // 1. Fast check for standard install directories (instant, 0ms)
+            // 1. Query Windows Registry via native reg.exe (The active, running Steam path)
+            try {
+                const { stdout } = await execAsync('reg query "HKCU\\Software\\Valve\\Steam" /v SteamPath', { timeout: 1500 });
+                const match = stdout.match(/SteamPath\s+REG_SZ\s+(.*)/i);
+                if (match && match[1]) {
+                    const regPath = match[1].trim().replace(/\//g, "\\");
+                    if (fs.existsSync(regPath)) {
+                        return regPath;
+                    }
+                }
+            }
+            catch { }
+            // 2. Query HKLM Registry fallback
+            try {
+                const { stdout } = await execAsync('reg query "HKLM\\Software\\Valve\\Steam" /v InstallPath', { timeout: 1500 });
+                const match = stdout.match(/InstallPath\s+REG_SZ\s+(.*)/i);
+                if (match && match[1]) {
+                    const regPath = match[1].trim().replace(/\//g, "\\");
+                    if (fs.existsSync(regPath)) {
+                        return regPath;
+                    }
+                }
+            }
+            catch { }
+            // 3. Check standard install directories
             const progFiles86 = process.env["ProgramFiles(x86)"] || "C:\\Program Files (x86)";
             const progFiles = process.env["ProgramFiles"] || "C:\\Program Files";
             const defaultPaths = [
@@ -83,18 +107,6 @@ class SteamService {
                 if (fs.existsSync(p))
                     return p;
             }
-            // 2. Query Windows Registry via native reg.exe (fast, <10ms)
-            try {
-                const { stdout } = await execAsync('reg query "HKCU\\Software\\Valve\\Steam" /v SteamPath', { timeout: 1500 });
-                const match = stdout.match(/SteamPath\s+REG_SZ\s+(.*)/i);
-                if (match && match[1]) {
-                    const regPath = match[1].trim().replace(/\//g, "\\");
-                    if (fs.existsSync(regPath)) {
-                        return regPath;
-                    }
-                }
-            }
-            catch { }
             return path.join(progFiles86, "Steam");
         }
         else {
@@ -190,6 +202,36 @@ class SteamService {
             return false;
         }
     }
+    async startSteam() {
+        const steamPath = await this.getSteamPath();
+        const platform = os.platform();
+        try {
+            if (platform === "win32") {
+                const steamExe = path.join(steamPath, "Steam.exe");
+                if (fs.existsSync(steamExe)) {
+                    (0, child_process_1.spawn)(steamExe, [], {
+                        detached: true,
+                        stdio: "ignore"
+                    }).unref();
+                    return true;
+                }
+            }
+            else {
+                const steamBin = path.join(steamPath, "steam.sh");
+                const cmd = fs.existsSync(steamBin) ? steamBin : "steam";
+                (0, child_process_1.spawn)(cmd, [], {
+                    detached: true,
+                    stdio: "ignore"
+                }).unref();
+                return true;
+            }
+            return false;
+        }
+        catch (err) {
+            console.error("Failed to start Steam:", err);
+            return false;
+        }
+    }
     async restartSteam(disableWebHelper = false) {
         await this.killSteamProcesses();
         await new Promise((r) => setTimeout(r, 1500));
@@ -198,17 +240,13 @@ class SteamService {
         try {
             if (platform === "win32") {
                 const steamExe = path.join(steamPath, "Steam.exe");
-                if (disableWebHelper) {
-                    (0, child_process_1.spawn)(steamExe, ["-no-browser", "+open", "steam://open/minigameslist"], {
+                const args = disableWebHelper ? ["-no-browser", "+open", "steam://open/minigameslist"] : [];
+                if (fs.existsSync(steamExe)) {
+                    (0, child_process_1.spawn)(steamExe, args, {
                         detached: true,
                         stdio: "ignore"
                     }).unref();
-                }
-                else {
-                    (0, child_process_1.spawn)("cmd.exe", ["/c", "start", "steam://flushconfig"], {
-                        detached: true,
-                        stdio: "ignore"
-                    }).unref();
+                    return true;
                 }
             }
             else {
@@ -218,8 +256,9 @@ class SteamService {
                     detached: true,
                     stdio: "ignore"
                 }).unref();
+                return true;
             }
-            return true;
+            return false;
         }
         catch (err) {
             console.error("Failed to restart Steam:", err);
@@ -231,6 +270,9 @@ class SteamService {
         if (!fs.existsSync(steamPath)) {
             throw new Error(`Steam directory not found at: ${steamPath}`);
         }
+        // Terminate Steam before writing DLL hooks to release locked handles
+        await this.killSteamProcesses();
+        await new Promise((r) => setTimeout(r, 1000));
         const tempDir = path.join(steamPath, "temp");
         if (!fs.existsSync(tempDir)) {
             fs.mkdirSync(tempDir, { recursive: true });
@@ -258,31 +300,25 @@ class SteamService {
                 downloadUrl = "https://github.com/Abrahamqb/OpenSteamMore-Dev/releases/latest/download/inject.zip";
             }
             const fileRes = await fetch(downloadUrl, {
-                headers: { "User-Agent": "OpenSteamManager" }
+                headers: { "User-Agent": "Mozilla/5.0" }
             });
             if (!fileRes.ok) {
                 throw new Error(`Failed to download patch payload: HTTP ${fileRes.status}`);
             }
             const arrayBuffer = await fileRes.arrayBuffer();
             fs.writeFileSync(zipPath, Buffer.from(arrayBuffer));
-            // Extract using AdmZip
+            // Extract DLL files directly into Steam directory
             const zip = new adm_zip_1.default(zipPath);
-            if (mode === 0) {
-                // Extract only DLL files directly to Steam root
-                const entries = zip.getEntries();
-                for (const entry of entries) {
-                    if (entry.entryName.toLowerCase().endsWith(".dll")) {
-                        const destFile = path.join(steamPath, path.basename(entry.entryName));
-                        fs.writeFileSync(destFile, entry.getData());
-                    }
+            const entries = zip.getEntries();
+            for (const entry of entries) {
+                if (entry.entryName.toLowerCase().endsWith(".dll")) {
+                    const destFile = path.join(steamPath, path.basename(entry.entryName));
+                    fs.writeFileSync(destFile, entry.getData());
                 }
-            }
-            else {
-                zip.extractAllTo(steamPath, true);
             }
             return {
                 success: true,
-                message: `Steam successfully patched via Mode ${mode}! Restart Steam to apply hooks.`
+                message: `Steam successfully patched via Mode ${mode}! Proxy hooks are active.`
             };
         }
         finally {

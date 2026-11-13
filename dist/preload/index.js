@@ -22,6 +22,9 @@ const openSteamAPI = {
     restartSteam: (noBrowser = false) => {
         return electron_1.ipcRenderer.invoke("steam:restart", noBrowser);
     },
+    startSteam: () => {
+        return electron_1.ipcRenderer.invoke("steam:start");
+    },
     launchSteamInstall: (appId) => {
         return electron_1.ipcRenderer.invoke("steam:install-game", appId);
     },
@@ -57,6 +60,9 @@ const openSteamAPI = {
     },
     listInstalledLuas: () => {
         return electron_1.ipcRenderer.invoke("lua:list-installed");
+    },
+    getInstalledLuasWithNames: () => {
+        return electron_1.ipcRenderer.invoke("lua:list-installed-with-names");
     },
     removeLua: (appId) => {
         return electron_1.ipcRenderer.invoke("lua:remove", appId);

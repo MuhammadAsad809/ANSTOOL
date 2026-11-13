@@ -32,12 +32,17 @@ function registerAllIpcHandlers(steamService, gameService, luaService, pluginSer
         broadcastLog(win, "info", `[1-CLICK] Unlocking game and binding manifests for AppID ${cleanAppId}...`);
         const luaRes = await luaService.generateAndInstallLua(cleanAppId);
         broadcastLog(win, "success", luaRes.message);
-        // 3. Restart Steam if it is currently running so it loads the new configuration
+        // 3. Ensure Steam is running with the proxy hook loaded
         const proc = await steamService.getProcessStatus();
         if (proc.steamRunning) {
-            broadcastLog(win, "info", `[1-CLICK] Relaunching Steam to apply changes...`);
+            broadcastLog(win, "info", `[1-CLICK] Restarting Steam to load new game unlocks...`);
             await steamService.restartSteam();
-            await new Promise((r) => setTimeout(r, 2000));
+            await new Promise((r) => setTimeout(r, 3000));
+        }
+        else {
+            broadcastLog(win, "info", `[1-CLICK] Launching Steam client with proxy hook...`);
+            await steamService.startSteam();
+            await new Promise((r) => setTimeout(r, 4000));
         }
         // 4. Trigger Steam native download/install
         broadcastLog(win, "info", `[1-CLICK] Dispatched steam://install/${cleanAppId}`);
@@ -54,6 +59,9 @@ function registerAllIpcHandlers(steamService, gameService, luaService, pluginSer
         };
     });
     // Steam Management
+    electron_1.ipcMain.handle("steam:start", async () => {
+        return await steamService.startSteam();
+    });
     electron_1.ipcMain.handle("steam:get-path-info", async () => {
         return await steamService.getSteamPathInfo();
     });
@@ -187,6 +195,9 @@ function registerAllIpcHandlers(steamService, gameService, luaService, pluginSer
     });
     electron_1.ipcMain.handle("lua:list-installed", async () => {
         return await luaService.listInstalledLuas();
+    });
+    electron_1.ipcMain.handle("lua:list-installed-with-names", async () => {
+        return await luaService.getInstalledLuasWithNames();
     });
     electron_1.ipcMain.handle("lua:remove", async (event, appId) => {
         const win = electron_1.BrowserWindow.fromWebContents(event.sender);

@@ -60,6 +60,7 @@ export interface OpenSteamAPI {
   getProcessStatus: () => Promise<ProcessStatus>;
   killSteamProcesses: () => Promise<boolean>;
   restartSteam: (noBrowser?: boolean) => Promise<boolean>;
+  startSteam: () => Promise<boolean>;
   launchSteamInstall: (appId: string | number) => Promise<boolean>;
   launchSteamRun: (appId: string | number) => Promise<boolean>;
 
@@ -77,6 +78,7 @@ export interface OpenSteamAPI {
   fixAllManifests: () => Promise<FixManifestsResult>;
   importManualLua: (filePath?: string) => Promise<{ success: boolean; importedFile: string; message: string }>;
   listInstalledLuas: () => Promise<string[]>;
+  getInstalledLuasWithNames: () => Promise<Array<{ appId: string; name: string }>>;
   removeLua: (appId: string) => Promise<boolean>;
 
   // Plugins

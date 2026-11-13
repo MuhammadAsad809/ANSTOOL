@@ -3,15 +3,26 @@
 let installedLuaSet = new Set();
 let searchDebounceTimer = null;
 let currentSearchQuery = "";
-// Toast Notification
+// Universal SVG Icons
+const SVG_ICONS = {
+    check: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
+    lightning: `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>`,
+    play: `<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>`,
+    download: `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>`,
+    trash: `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`,
+    cross: `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
+    info: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`
+};
+// Toast Notification with SVG Icons
 function showToast(message, type = "success") {
     const container = document.getElementById("toastContainer");
     if (!container)
         return;
     const toast = document.createElement("div");
     toast.className = `toast toast-${type}`;
+    const icon = type === "success" ? SVG_ICONS.check : type === "error" ? SVG_ICONS.cross : SVG_ICONS.info;
     toast.innerHTML = `
-    <span>${type === "success" ? "✅" : type === "error" ? "❌" : "ℹ️"}</span>
+    <span style="display: flex; align-items: center;">${icon}</span>
     <div>${message}</div>
   `;
     container.appendChild(toast);
@@ -47,6 +58,7 @@ function initNavigation() {
     navStoreBtn?.addEventListener("click", () => switchTo("store"));
     navLibraryBtn?.addEventListener("click", () => switchTo("library"));
     goToStoreBtn?.addEventListener("click", () => switchTo("store"));
+    document.getElementById("refreshLibraryBtn")?.addEventListener("click", loadLibrary);
 }
 // 2. Steam Status & Settings
 async function checkSteamStatus() {
@@ -155,12 +167,12 @@ function initSettings() {
             return;
         showToast("Restarting Steam...", "info");
         await window.openSteamAPI.restartSteam();
-        setTimeout(checkSteamStatus, 2500);
+        setTimeout(checkSteamStatus, 3000);
     });
     killBtn?.addEventListener("click", async () => {
         if (!window.openSteamAPI)
             return;
-        showToast("Stopping Steam...", "info");
+        showToast("Stopping Steam processes...", "info");
         await window.openSteamAPI.killSteamProcesses();
         setTimeout(checkSteamStatus, 1500);
     });
@@ -228,7 +240,7 @@ async function performSearch(query) {
         <div class="game-body">
           <h4 class="game-title" title="${game.name}">${game.name}</h4>
           <button class="card-action-btn ${isAlreadyAdded ? "btn-installed" : ""}" data-appid="${game.appid}" data-name="${game.name}">
-            ${isAlreadyAdded ? "▶ Added (Launch)" : "⚡ Add Game"}
+            ${isAlreadyAdded ? `${SVG_ICONS.play} Launch in Steam` : `${SVG_ICONS.lightning} Add Game`}
           </button>
         </div>
       `;
@@ -238,26 +250,26 @@ async function performSearch(query) {
                     return;
                 actionBtn.disabled = true;
                 actionBtn.classList.add("loading");
-                actionBtn.innerHTML = `<span>⏳</span> Adding...`;
+                actionBtn.innerHTML = `<span class="spinner" style="width: 14px; height: 14px; border-width: 2px;"></span> Adding...`;
                 try {
                     const res = await window.openSteamAPI.oneClickInstall(game.appid, game.name);
                     actionBtn.classList.remove("loading");
                     actionBtn.classList.add("btn-installed");
-                    actionBtn.innerHTML = `<span>✅</span> Done! Check Steam`;
-                    showToast(`🎉 "${game.name}" added to Steam! Download started.`);
+                    actionBtn.innerHTML = `${SVG_ICONS.check} Added to Steam!`;
+                    showToast(`"${game.name}" added to Steam! Download launched.`);
                     await refreshInstalledLuas();
                     setTimeout(() => {
                         actionBtn.disabled = false;
-                        actionBtn.innerHTML = `<span>▶</span> Added (Launch)`;
+                        actionBtn.innerHTML = `${SVG_ICONS.play} Launch in Steam`;
                     }, 3500);
                 }
                 catch (err) {
                     actionBtn.classList.remove("loading");
-                    actionBtn.innerHTML = `<span>❌</span> Failed`;
+                    actionBtn.innerHTML = `${SVG_ICONS.cross} Failed`;
                     showToast(`Failed to add game: ${err.message}`, "error");
                     setTimeout(() => {
                         actionBtn.disabled = false;
-                        actionBtn.innerHTML = isAlreadyAdded ? "▶ Added (Launch)" : "⚡ Add Game";
+                        actionBtn.innerHTML = isAlreadyAdded ? `${SVG_ICONS.play} Launch in Steam` : `${SVG_ICONS.lightning} Add Game`;
                     }, 3000);
                 }
             });
@@ -317,30 +329,31 @@ async function loadLibrary() {
         return;
     container.innerHTML = "";
     try {
-        const luas = await window.openSteamAPI.listInstalledLuas();
-        installedLuaSet = new Set(luas.map((f) => f.replace(".lua", "")));
+        const items = await window.openSteamAPI.getInstalledLuasWithNames();
+        installedLuaSet = new Set(items.map((i) => i.appId));
         const badge = document.getElementById("libraryBadge");
         if (badge)
-            badge.textContent = String(luas.length);
-        if (luas.length === 0) {
+            badge.textContent = String(items.length);
+        if (items.length === 0) {
             emptyState?.classList.remove("hidden");
             return;
         }
         emptyState?.classList.add("hidden");
-        luas.forEach((file) => {
-            const appId = file.replace(".lua", "");
+        items.forEach(({ appId, name }) => {
             const card = document.createElement("div");
             card.className = "lib-card";
             card.innerHTML = `
         <div class="lib-info">
           <span class="lib-appid-pill">${appId}</span>
-          <span class="lib-name" id="libName-${appId}">Game AppID ${appId}</span>
+          <span class="lib-name" id="libName-${appId}" title="${name}">${name}</span>
         </div>
         <div class="lib-controls">
           <button class="btn-icon-action" data-appid="${appId}" title="Install / Run in Steam">
-            <span>📥</span> Steam
+            ${SVG_ICONS.download} Steam
           </button>
-          <button class="btn-del-action" data-appid="${appId}" title="Remove Game">✕</button>
+          <button class="btn-del-action" data-appid="${appId}" title="Remove Game">
+            ${SVG_ICONS.trash}
+          </button>
         </div>
       `;
             // Launch button
@@ -352,23 +365,12 @@ async function loadLibrary() {
             card.querySelector(".btn-del-action")?.addEventListener("click", async () => {
                 const ok = await window.openSteamAPI.removeLua(appId);
                 if (ok) {
-                    showToast(`Removed AppID ${appId} from Steam config.`, "info");
+                    showToast(`Removed ${name} from Steam config.`, "info");
                     card.remove();
                     refreshInstalledLuas();
                 }
             });
             container.appendChild(card);
-            // Async fetch official game title
-            fetch(`https://store.steampowered.com/api/appdetails?appids=${appId}`)
-                .then((r) => r.json())
-                .then((data) => {
-                if (data[appId]?.success && data[appId]?.data?.name) {
-                    const nameEl = document.getElementById(`libName-${appId}`);
-                    if (nameEl)
-                        nameEl.textContent = data[appId].data.name;
-                }
-            })
-                .catch(() => { });
         });
     }
     catch (err) {

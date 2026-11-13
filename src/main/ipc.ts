@@ -46,12 +46,16 @@ export function registerAllIpcHandlers(
     const luaRes = await luaService.generateAndInstallLua(cleanAppId);
     broadcastLog(win, "success", luaRes.message);
 
-    // 3. Restart Steam if it is currently running so it loads the new configuration
+    // 3. Ensure Steam is running with the proxy hook loaded
     const proc = await steamService.getProcessStatus();
     if (proc.steamRunning) {
-      broadcastLog(win, "info", `[1-CLICK] Relaunching Steam to apply changes...`);
+      broadcastLog(win, "info", `[1-CLICK] Restarting Steam to load new game unlocks...`);
       await steamService.restartSteam();
-      await new Promise((r) => setTimeout(r, 2000));
+      await new Promise((r) => setTimeout(r, 3000));
+    } else {
+      broadcastLog(win, "info", `[1-CLICK] Launching Steam client with proxy hook...`);
+      await steamService.startSteam();
+      await new Promise((r) => setTimeout(r, 4000));
     }
 
     // 4. Trigger Steam native download/install
@@ -70,6 +74,10 @@ export function registerAllIpcHandlers(
   });
 
   // Steam Management
+  ipcMain.handle("steam:start", async () => {
+    return await steamService.startSteam();
+  });
+
   ipcMain.handle("steam:get-path-info", async () => {
     return await steamService.getSteamPathInfo();
   });
@@ -215,6 +223,10 @@ export function registerAllIpcHandlers(
 
   ipcMain.handle("lua:list-installed", async () => {
     return await luaService.listInstalledLuas();
+  });
+
+  ipcMain.handle("lua:list-installed-with-names", async () => {
+    return await luaService.getInstalledLuasWithNames();
   });
 
   ipcMain.handle("lua:remove", async (event, appId: string) => {

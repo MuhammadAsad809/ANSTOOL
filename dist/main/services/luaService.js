@@ -114,10 +114,13 @@ class LuaService {
             throw new Error(`Invalid AppID: ${appId}. Must be numeric.`);
         }
         const steamPath = await this.steamService.getSteamPath();
-        const luaFolder = path.join(steamPath, "config", this.steamService.getLuaFolder());
+        const luaFolder1 = path.join(steamPath, "config", "stplug-in");
+        const luaFolder2 = path.join(steamPath, "stplug-in");
         const depotCache = path.join(steamPath, "depotcache");
-        if (!fs.existsSync(luaFolder))
-            fs.mkdirSync(luaFolder, { recursive: true });
+        if (!fs.existsSync(luaFolder1))
+            fs.mkdirSync(luaFolder1, { recursive: true });
+        if (!fs.existsSync(luaFolder2))
+            fs.mkdirSync(luaFolder2, { recursive: true });
         if (!fs.existsSync(depotCache))
             fs.mkdirSync(depotCache, { recursive: true });
         // 1. Fetch Depot Keys
@@ -148,7 +151,7 @@ class LuaService {
             }
         }
         catch { }
-        const targetLuaPath = path.join(luaFolder, `${appId}.lua`);
+        const targetLuaPath = path.join(luaFolder1, `${appId}.lua`);
         const lines = [
             `-- ANSTOOL 1-Click Game Unlocker`,
             `-- Game: ${gameName}`,
@@ -265,10 +268,12 @@ class LuaService {
             lines.push(`-- Depot Manifests`);
             lines.push(...manifestEntries);
         }
-        fs.writeFileSync(targetLuaPath, lines.join("\n") + "\n", "utf-8");
+        const finalContent = lines.join("\n") + "\n";
+        fs.writeFileSync(path.join(luaFolder1, `${appId}.lua`), finalContent, "utf-8");
+        fs.writeFileSync(path.join(luaFolder2, `${appId}.lua`), finalContent, "utf-8");
         return {
             success: true,
-            luaPath: targetLuaPath,
+            luaPath: path.join(luaFolder1, `${appId}.lua`),
             manifestsCount: manifestEntries.length,
             message: `Unlocked "${gameName}" (${appId}) successfully!`
         };
@@ -418,19 +423,73 @@ class LuaService {
     }
     async listInstalledLuas() {
         const steamPath = await this.steamService.getSteamPath();
-        const luaFolder = path.join(steamPath, "config", this.steamService.getLuaFolder());
-        if (!fs.existsSync(luaFolder))
-            return [];
-        return fs.readdirSync(luaFolder).filter((f) => f.endsWith(".lua"));
+        const folders = [
+            path.join(steamPath, "config", "stplug-in"),
+            path.join(steamPath, "stplug-in")
+        ];
+        const set = new Set();
+        for (const f of folders) {
+            if (fs.existsSync(f)) {
+                try {
+                    for (const file of fs.readdirSync(f)) {
+                        if (file.endsWith(".lua"))
+                            set.add(file);
+                    }
+                }
+                catch { }
+            }
+        }
+        return Array.from(set);
+    }
+    async getInstalledLuasWithNames() {
+        const steamPath = await this.steamService.getSteamPath();
+        const folders = [
+            path.join(steamPath, "config", "stplug-in"),
+            path.join(steamPath, "stplug-in")
+        ];
+        const map = new Map();
+        for (const f of folders) {
+            if (fs.existsSync(f)) {
+                try {
+                    for (const file of fs.readdirSync(f)) {
+                        if (file.endsWith(".lua")) {
+                            const appId = file.replace(".lua", "");
+                            if (!map.has(appId)) {
+                                let name = `Steam AppID ${appId}`;
+                                try {
+                                    const content = fs.readFileSync(path.join(f, file), "utf-8");
+                                    const m = content.match(/--\s*Game:\s*(.*)/i);
+                                    if (m && m[1])
+                                        name = m[1].trim();
+                                }
+                                catch { }
+                                map.set(appId, name);
+                            }
+                        }
+                    }
+                }
+                catch { }
+            }
+        }
+        return Array.from(map.entries()).map(([appId, name]) => ({ appId, name }));
     }
     async removeLua(appId) {
         const steamPath = await this.steamService.getSteamPath();
-        const target = path.join(steamPath, "config", this.steamService.getLuaFolder(), `${appId}.lua`);
-        if (fs.existsSync(target)) {
-            fs.unlinkSync(target);
-            return true;
+        const targets = [
+            path.join(steamPath, "config", "stplug-in", `${appId}.lua`),
+            path.join(steamPath, "stplug-in", `${appId}.lua`)
+        ];
+        let removed = false;
+        for (const target of targets) {
+            if (fs.existsSync(target)) {
+                try {
+                    fs.unlinkSync(target);
+                    removed = true;
+                }
+                catch { }
+            }
         }
-        return false;
+        return removed;
     }
 }
 exports.LuaService = LuaService;
