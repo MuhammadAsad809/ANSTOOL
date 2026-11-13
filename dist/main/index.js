@@ -54,7 +54,7 @@ function createWindow() {
         minWidth: 960,
         minHeight: 640,
         backgroundColor: "#070a13",
-        title: "OpenSteam Desktop",
+        title: "ANSTOOL - 1-Click Steam Unlocker",
         webPreferences: {
             preload: path.join(__dirname, "../preload/index.js"),
             contextIsolation: true,

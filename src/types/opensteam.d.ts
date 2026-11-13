@@ -51,6 +51,9 @@ export interface ProcessStatus {
 }
 
 export interface OpenSteamAPI {
+  // 1-Click Fast Install
+  oneClickInstall: (appId: string | number, gameName?: string) => Promise<{ success: boolean; appId: string; gameName: string; message: string }>;
+
   // Steam management
   getSteamPathInfo: () => Promise<SteamPathInfo>;
   setCustomSteamPath: (customPath: string) => Promise<SteamPathInfo>;

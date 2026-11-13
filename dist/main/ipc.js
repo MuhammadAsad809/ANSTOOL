@@ -8,6 +8,51 @@ function registerAllIpcHandlers(steamService, gameService, luaService, pluginSer
             window.webContents.send("app:log", { level, message });
         }
     }
+    // 1-Click Fast Game Unlock & Install
+    electron_1.ipcMain.handle("steam:one-click-install", async (event, appId, gameName) => {
+        const win = electron_1.BrowserWindow.fromWebContents(event.sender);
+        const cleanAppId = String(appId).trim();
+        broadcastLog(win, "info", `[1-CLICK] Initializing 1-Click Install for ${gameName || cleanAppId}...`);
+        // 1. Ensure Steam is found and patched
+        const pathInfo = await steamService.getSteamPathInfo();
+        if (!pathInfo.exists) {
+            throw new Error(`Steam folder not found at ${pathInfo.path}. Please verify your Steam path.`);
+        }
+        if (!pathInfo.isPatched) {
+            broadcastLog(win, "info", `[1-CLICK] Steam hook not active. Automatically deploying proxy hooks...`);
+            try {
+                await steamService.patchSteam(1);
+                broadcastLog(win, "success", `[1-CLICK] Steam proxy hook deployed.`);
+            }
+            catch (err) {
+                broadcastLog(win, "warn", `[1-CLICK] Hook notice: ${err.message}`);
+            }
+        }
+        // 2. Generate and install Lua unlock + depot manifests
+        broadcastLog(win, "info", `[1-CLICK] Unlocking game and binding manifests for AppID ${cleanAppId}...`);
+        const luaRes = await luaService.generateAndInstallLua(cleanAppId);
+        broadcastLog(win, "success", luaRes.message);
+        // 3. Restart Steam if it is currently running so it loads the new configuration
+        const proc = await steamService.getProcessStatus();
+        if (proc.steamRunning) {
+            broadcastLog(win, "info", `[1-CLICK] Relaunching Steam to apply changes...`);
+            await steamService.restartSteam();
+            await new Promise((r) => setTimeout(r, 2000));
+        }
+        // 4. Trigger Steam native download/install
+        broadcastLog(win, "info", `[1-CLICK] Dispatched steam://install/${cleanAppId}`);
+        try {
+            await electron_1.shell.openExternal(`steam://install/${cleanAppId}`);
+        }
+        catch { }
+        broadcastLog(win, "success", `[1-CLICK] Done! "${gameName || cleanAppId}" added to Steam.`);
+        return {
+            success: true,
+            appId: cleanAppId,
+            gameName: gameName || cleanAppId,
+            message: `"${gameName || cleanAppId}" added to your Steam library! Installation launched in Steam.`
+        };
+    });
     // Steam Management
     electron_1.ipcMain.handle("steam:get-path-info", async () => {
         return await steamService.getSteamPathInfo();

@@ -156,10 +156,64 @@ export class GameService {
     if (isNumeric) {
       const match = list.filter((g) => g.appid === cleanQuery);
       if (match.length > 0) return match;
+
+      // Direct fallback to Steam store details for numeric AppID
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 3500);
+        const res = await fetch(`https://store.steampowered.com/api/appdetails?appids=${cleanQuery}`, {
+          signal: controller.signal,
+          headers: { "User-Agent": "Mozilla/5.0" }
+        });
+        clearTimeout(timeout);
+        if (res.ok) {
+          const json: any = await res.json();
+          if (json[cleanQuery]?.success && json[cleanQuery]?.data?.name) {
+            return [{
+              appid: cleanQuery,
+              name: json[cleanQuery].data.name,
+              installed: false
+            }];
+          }
+        }
+      } catch {}
     }
 
-    return list
+    // Search local list first
+    const localMatches = list
       .filter((g) => g.name && g.name.toLowerCase().includes(cleanQuery))
       .slice(0, limit);
+
+    // If local results are low, query official Steam store search
+    if (localMatches.length < 15) {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 3500);
+        const res = await fetch(`https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(cleanQuery)}&l=english&cc=US`, {
+          signal: controller.signal,
+          headers: { "User-Agent": "Mozilla/5.0" }
+        });
+        clearTimeout(timeout);
+        if (res.ok) {
+          const json: any = await res.json();
+          if (json.items && Array.isArray(json.items)) {
+            const seen = new Set(localMatches.map((m) => String(m.appid)));
+            for (const item of json.items) {
+              const appIdStr = String(item.id);
+              if (!seen.has(appIdStr)) {
+                seen.add(appIdStr);
+                localMatches.push({
+                  appid: appIdStr,
+                  name: item.name,
+                  installed: false
+                });
+              }
+            }
+          }
+        }
+      } catch {}
+    }
+
+    return localMatches.slice(0, limit);
   }
 }

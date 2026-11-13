@@ -1,661 +1,402 @@
-// OpenSteam Desktop Client Script
+// ANSTOOL 1-Click Fast Game Unlocker Client
 
-function addLog(message: string, level: "info" | "success" | "warn" | "error" = "info"): void {
-  const container = document.getElementById("logConsoleOutput");
+let installedLuaSet = new Set<string>();
+let searchDebounceTimer: any = null;
+let currentSearchQuery = "";
+
+// Toast Notification
+function showToast(message: string, type: "success" | "error" | "info" = "success"): void {
+  const container = document.getElementById("toastContainer");
   if (!container) return;
 
-  const time = new Date().toISOString().split("T")[1].slice(0, 8);
-  const div = document.createElement("div");
-  div.className = `log-entry ${level}`;
-  div.textContent = `[${time}] [${level.toUpperCase()}] ${message}`;
+  const toast = document.createElement("div");
+  toast.className = `toast toast-${type}`;
+  toast.innerHTML = `
+    <span>${type === "success" ? "✅" : type === "error" ? "❌" : "ℹ️"}</span>
+    <div>${message}</div>
+  `;
 
-  container.appendChild(div);
-  container.scrollTop = container.scrollHeight;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.style.opacity = "0";
+    toast.style.transform = "translateY(10px)";
+    toast.style.transition = "all 0.3s ease";
+    setTimeout(() => toast.remove(), 300);
+  }, 4000);
 }
 
-// 1. Navigation
-function initNav(): void {
-  const navBtns = document.querySelectorAll<HTMLButtonElement>(".nav-btn");
-  const tabPanes = document.querySelectorAll<HTMLElement>(".tab-pane");
-  const pageTitle = document.getElementById("pageTitle");
+// 1. Navigation & View Switching
+function initNavigation(): void {
+  const navStoreBtn = document.getElementById("navStoreBtn");
+  const navLibraryBtn = document.getElementById("navLibraryBtn");
+  const viewStore = document.getElementById("viewStore");
+  const viewLibrary = document.getElementById("viewLibrary");
+  const goToStoreBtn = document.getElementById("goToStoreBtn");
 
-  const titles: Record<string, string> = {
-    dashboard: "Dashboard & Operations",
-    store: "Lua Store & Game Unlocker",
-    library: "Installed Steam Games Library",
-    manifests: "Manifest Synchronizer & Lua Inspector",
-    plugins: "Millennium Loader & LuaManager Plugins",
-    onlinefix: "Online-Fix Multiplayer Bypass",
-    manual: "Manual Lua Loader",
-    console: "System Runtime Console"
-  };
+  function switchTo(view: "store" | "library") {
+    if (view === "store") {
+      navStoreBtn?.classList.add("active");
+      navLibraryBtn?.classList.remove("active");
+      viewStore?.classList.add("active");
+      viewLibrary?.classList.remove("active");
+    } else {
+      navLibraryBtn?.classList.add("active");
+      navStoreBtn?.classList.remove("active");
+      viewLibrary?.classList.add("active");
+      viewStore?.classList.remove("active");
+      loadLibrary();
+    }
+  }
 
-  navBtns.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const target = btn.getAttribute("data-tab");
-      if (!target) return;
-
-      navBtns.forEach((b) => b.classList.remove("active"));
-      tabPanes.forEach((p) => p.classList.remove("active"));
-
-      btn.classList.add("active");
-      const activePane = document.getElementById(`tab-${target}`);
-      if (activePane) activePane.classList.add("active");
-
-      if (pageTitle && titles[target]) {
-        pageTitle.textContent = titles[target];
-      }
-
-      if (target === "manifests") loadInstalledLuas();
-      if (target === "library") loadInstalledGames();
-    });
-  });
+  navStoreBtn?.addEventListener("click", () => switchTo("store"));
+  navLibraryBtn?.addEventListener("click", () => switchTo("library"));
+  goToStoreBtn?.addEventListener("click", () => switchTo("store"));
 }
 
-// 2. Steam State & Path
-async function refreshSteamInfo(): Promise<OpenSteamPathInfo | null> {
-  const hookBadge = document.getElementById("hookStatusBadge");
-  const procBadge = document.getElementById("processStatusBadge");
-
-  const banner = document.getElementById("ipcErrorBanner");
+// 2. Steam Status & Settings
+async function checkSteamStatus(): Promise<void> {
+  const indicator = document.getElementById("steamStatusIndicator");
+  const text = document.getElementById("steamStatusText");
+  const settingsPath = document.getElementById("settingsSteamPath");
+  const hookPill = document.getElementById("settingsHookStatus");
 
   if (!window.openSteamAPI) {
-    if (banner) banner.classList.remove("hidden");
-    if (hookBadge) {
-      hookBadge.className = "badge badge-unpatched";
-      hookBadge.textContent = "IPC ERROR";
-    }
-    if (procBadge) {
-      procBadge.className = "badge badge-inactive";
-      procBadge.textContent = "DISCONNECTED";
-    }
-    addLog("Preload IPC bridge not found. openSteamAPI is undefined.", "error");
-    return null;
+    if (indicator) indicator.className = "status-indicator status-missing";
+    if (text) text.textContent = "IPC Error";
+    return;
   }
-
-  if (banner) banner.classList.add("hidden");
 
   try {
-    const info = await window.openSteamAPI.getSteamPathInfo();
-    const proc = await window.openSteamAPI.getProcessStatus();
+    const [pathInfo, procStatus] = await Promise.all([
+      window.openSteamAPI.getSteamPathInfo(),
+      window.openSteamAPI.getProcessStatus()
+    ]);
 
-    // Badges
-    if (hookBadge) {
-      if (info.isPatched) {
-        hookBadge.className = "badge badge-patched";
-        hookBadge.textContent = "[PATCHED]";
+    if (!pathInfo.exists) {
+      if (indicator) indicator.className = "status-indicator status-missing";
+      if (text) text.textContent = "Steam Not Found";
+    } else if (procStatus.steamRunning) {
+      if (indicator) indicator.className = "status-indicator status-ready";
+      if (text) text.textContent = "Steam Ready";
+    } else {
+      if (indicator) indicator.className = "status-indicator status-stopped";
+      if (text) text.textContent = "Steam Closed";
+    }
+
+    if (settingsPath) settingsPath.textContent = pathInfo.path;
+    if (hookPill) {
+      if (pathInfo.isPatched) {
+        hookPill.className = "hook-pill patched";
+        hookPill.textContent = "Active (Patched)";
       } else {
-        hookBadge.className = "badge badge-unpatched";
-        hookBadge.textContent = "[NOT PATCHED]";
+        hookPill.className = "hook-pill unpatched";
+        hookPill.textContent = "Not Patched";
       }
     }
-
-    if (procBadge) {
-      if (proc.steamRunning) {
-        procBadge.className = "badge badge-active";
-        procBadge.textContent = "RUNNING";
-      } else {
-        procBadge.className = "badge badge-inactive";
-        procBadge.textContent = "STOPPED";
-      }
-    }
-
-    // Dashboard values
-    const dashSteamValid = document.getElementById("dashSteamValid");
-    const dashSteamPathText = document.getElementById("dashSteamPathText");
-    const sidebarSteamPath = document.getElementById("sidebarSteamPath");
-    const dashDllCount = document.getElementById("dashDllCount");
-    const dashDllList = document.getElementById("dashDllList");
-
-    if (dashSteamValid) dashSteamValid.textContent = info.exists ? "FOUND" : "NOT FOUND";
-    if (dashSteamPathText) dashSteamPathText.textContent = info.path;
-    if (sidebarSteamPath) sidebarSteamPath.textContent = `Steam: ${info.path}`;
-
-    if (dashDllCount) dashDllCount.textContent = `${info.injectedFiles.length} DLL(s)`;
-    if (dashDllList) {
-      dashDllList.textContent = info.injectedFiles.length > 0
-        ? info.injectedFiles.join(", ")
-        : "None (Standard Steam)";
-    }
-
-    return info;
-  } catch (err: any) {
-    addLog(`Error checking Steam path info: ${err.message}`, "error");
-    return null;
-  }
+  } catch {}
 }
 
-// 3. Quick Actions
-function initQuickActions(): void {
-  const quickPatchBtn = document.getElementById("quickPatchBtn");
-  const quickUnpatchBtn = document.getElementById("quickUnpatchBtn");
-  const quickRestartBtn = document.getElementById("quickRestartBtn");
-  const quickKillBtn = document.getElementById("quickKillBtn");
-  const patchMode1Btn = document.getElementById("patchMode1Btn");
-  const patchMode0Btn = document.getElementById("patchMode0Btn");
-  const changePathBtn = document.getElementById("changePathBtn");
+function initSettings(): void {
+  const modal = document.getElementById("settingsModal");
+  const openBtn = document.getElementById("openSettingsBtn");
+  const closeBtn = document.getElementById("closeSettingsBtn");
+  const changePathBtn = document.getElementById("changeSteamPathBtn");
+  const reapplyHookBtn = document.getElementById("reapplyHookBtn");
+  const unpatchBtn = document.getElementById("unpatchBtn");
+  const restartBtn = document.getElementById("restartSteamBtn");
+  const killBtn = document.getElementById("killSteamBtn");
 
-  async function handlePatch(mode: number): Promise<void> {
-    if (!window.openSteamAPI) return;
-    try {
-      addLog(`Initiating Steam patch (Mode ${mode})...`, "info");
-      const res = await window.openSteamAPI.patchSteam(mode);
-      addLog(res.message, res.success ? "success" : "error");
-      await refreshSteamInfo();
-    } catch (err: any) {
-      addLog(`Patch error: ${err.message}`, "error");
-    }
-  }
+  openBtn?.addEventListener("click", () => modal?.classList.remove("hidden"));
+  closeBtn?.addEventListener("click", () => modal?.classList.add("hidden"));
 
-  async function handleUnpatch(): Promise<void> {
-    if (!window.openSteamAPI) return;
-    try {
-      addLog("Initiating Steam unpatch...", "info");
-      const res = await window.openSteamAPI.unpatchSteam();
-      addLog(res.message, res.success ? "success" : "error");
-      await refreshSteamInfo();
-    } catch (err: any) {
-      addLog(`Unpatch error: ${err.message}`, "error");
-    }
-  }
-
-  quickPatchBtn?.addEventListener("click", () => handlePatch(1));
-  patchMode1Btn?.addEventListener("click", () => handlePatch(1));
-  patchMode0Btn?.addEventListener("click", () => handlePatch(0));
-  quickUnpatchBtn?.addEventListener("click", handleUnpatch);
-
-  quickRestartBtn?.addEventListener("click", async () => {
-    if (!window.openSteamAPI) return;
-    addLog("Restarting Steam client...", "info");
-    await window.openSteamAPI.restartSteam();
-    setTimeout(refreshSteamInfo, 2500);
-  });
-
-  quickKillBtn?.addEventListener("click", async () => {
-    if (!window.openSteamAPI) return;
-    addLog("Stopping all Steam processes...", "info");
-    await window.openSteamAPI.killSteamProcesses();
-    setTimeout(refreshSteamInfo, 1000);
+  modal?.addEventListener("click", (e) => {
+    if (e.target === modal) modal.classList.add("hidden");
   });
 
   changePathBtn?.addEventListener("click", async () => {
     if (!window.openSteamAPI) return;
     const selected = await window.openSteamAPI.selectDirectory();
     if (selected) {
-      addLog(`Setting custom Steam path: ${selected}`, "info");
       await window.openSteamAPI.setCustomSteamPath(selected);
-      await refreshSteamInfo();
+      showToast("Steam path updated!", "info");
+      checkSteamStatus();
     }
   });
-}
 
-let activeModalAppId: string | number | null = null;
-
-function showGameUnlockedModal(appId: string | number, gameTitle?: string): void {
-  activeModalAppId = appId;
-  const modal = document.getElementById("gameUnlockedModal");
-  const modalTitle = document.getElementById("modalGameTitle");
-  const modalAppId = document.getElementById("modalGameAppId");
-
-  if (modalTitle) modalTitle.textContent = gameTitle ? `Unlocked: ${gameTitle}` : "Game Unlocked & Injected!";
-  if (modalAppId) modalAppId.textContent = `Steam AppID: ${appId}`;
-
-  if (modal) modal.classList.remove("hidden");
-}
-
-function initModal(): void {
-  const modal = document.getElementById("gameUnlockedModal");
-  const closeModalBtn = document.getElementById("closeModalBtn");
-  const modalDoneBtn = document.getElementById("modalDoneBtn");
-  const modalRestartSteamBtn = document.getElementById("modalRestartSteamBtn");
-  const modalInstallSteamBtn = document.getElementById("modalInstallSteamBtn");
-
-  function hideModal() {
-    if (modal) modal.classList.add("hidden");
-  }
-
-  closeModalBtn?.addEventListener("click", hideModal);
-  modalDoneBtn?.addEventListener("click", hideModal);
-
-  modalRestartSteamBtn?.addEventListener("click", async () => {
+  reapplyHookBtn?.addEventListener("click", async () => {
     if (!window.openSteamAPI) return;
-    addLog("Restarting Steam client...", "info");
+    try {
+      showToast("Deploying Steam proxy hook...", "info");
+      const res = await window.openSteamAPI.patchSteam(1);
+      showToast(res.message, res.success ? "success" : "error");
+      checkSteamStatus();
+    } catch (err: any) {
+      showToast(`Hook error: ${err.message}`, "error");
+    }
+  });
+
+  unpatchBtn?.addEventListener("click", async () => {
+    if (!window.openSteamAPI) return;
+    try {
+      showToast("Removing hooks and cleaning up...", "info");
+      const res = await window.openSteamAPI.unpatchSteam();
+      showToast(res.message, res.success ? "success" : "error");
+      checkSteamStatus();
+    } catch (err: any) {
+      showToast(`Unpatch error: ${err.message}`, "error");
+    }
+  });
+
+  restartBtn?.addEventListener("click", async () => {
+    if (!window.openSteamAPI) return;
+    showToast("Restarting Steam...", "info");
     await window.openSteamAPI.restartSteam();
-    addLog("Steam restart command sent.", "success");
-    setTimeout(refreshSteamInfo, 2500);
+    setTimeout(checkSteamStatus, 2500);
   });
 
-  modalInstallSteamBtn?.addEventListener("click", async () => {
-    if (!window.openSteamAPI || !activeModalAppId) return;
-    addLog(`Launching official Steam installation for AppID ${activeModalAppId}...`, "info");
-    await window.openSteamAPI.launchSteamInstall(activeModalAppId);
-    addLog(`Dispatched steam://install/${activeModalAppId}. Check your Steam window.`, "success");
+  killBtn?.addEventListener("click", async () => {
+    if (!window.openSteamAPI) return;
+    showToast("Stopping Steam...", "info");
+    await window.openSteamAPI.killSteamProcesses();
+    setTimeout(checkSteamStatus, 1500);
   });
 }
 
-// 4. Lua Store & Game Unlocker
-function initStore(): void {
-  const storeSearchInput = document.getElementById("storeSearchInput") as HTMLInputElement | null;
-  const storeSearchBtn = document.getElementById("storeSearchBtn");
-  const storeSyncCatalogBtn = document.getElementById("storeSyncCatalogBtn");
-  const directAppIdInput = document.getElementById("directAppIdInput") as HTMLInputElement | null;
-  const directUnlockBtn = document.getElementById("directUnlockBtn");
-  const resultsGrid = document.getElementById("storeResultsGrid");
-  const loading = document.getElementById("catalogLoading");
-
-  async function performSearch(): Promise<void> {
-    if (!window.openSteamAPI) return;
-    const query = storeSearchInput?.value.trim() || "";
-    if (loading) loading.classList.remove("hidden");
-    if (resultsGrid) resultsGrid.innerHTML = "";
-
-    try {
-      const games = await window.openSteamAPI.searchCatalog(query, 36);
-      if (loading) loading.classList.add("hidden");
-
-      if (!resultsGrid) return;
-
-      if (!games || games.length === 0) {
-        resultsGrid.innerHTML = `<div class="loading-state">No games found matching "${query}". Try searching by numeric AppID.</div>`;
-        return;
-      }
-
-      games.forEach((game) => {
-        const card = document.createElement("div");
-        card.className = "game-card";
-
-        const bannerUrl = `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.appid}/header.jpg`;
-
-        card.innerHTML = `
-          <img class="game-thumb" src="${bannerUrl}" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'240\\' height=\\'115\\' viewBox=\\'0 0 240 115\\'><rect fill=\\'%23070a13\\' width=\\'240\\' height=\\'115\\'/><text fill=\\'%2364748b\\' x=\\'50%\\' y=\\'50%\\' text-anchor=\\'middle\\' font-family=\\'monospace\\' font-size=\\'12\\'>NO STEAM BANNER</text></svg>'" alt="${game.name}" />
-          <div class="game-info">
-            <div class="game-name" title="${game.name}">${game.name}</div>
-            <div class="game-appid">AppID: ${game.appid}</div>
-            <div style="display: flex; gap: 8px; margin-top: auto;">
-              <button class="btn btn-emerald unlock-btn" style="flex: 1;" data-appid="${game.appid}">⚡ Unlock</button>
-              <button class="btn btn-sky store-install-btn" title="Launch Steam Install" data-appid="${game.appid}">📥</button>
-            </div>
-          </div>
-        `;
-
-        const unlockBtn = card.querySelector<HTMLButtonElement>(".unlock-btn");
-        const storeInstallBtn = card.querySelector<HTMLButtonElement>(".store-install-btn");
-
-        unlockBtn?.addEventListener("click", async () => {
-          if (!window.openSteamAPI) return;
-          unlockBtn.disabled = true;
-          unlockBtn.textContent = "Syncing...";
-          try {
-            const res = await window.openSteamAPI.generateAndInstallLua(game.appid);
-            addLog(res.message, res.success ? "success" : "error");
-            unlockBtn.textContent = "✔ Unlocked";
-            showGameUnlockedModal(game.appid, game.name);
-          } catch (err: any) {
-            addLog(`Unlock failed for ${game.name}: ${err.message}`, "error");
-            unlockBtn.textContent = "Failed";
-          } finally {
-            setTimeout(() => {
-              unlockBtn.disabled = false;
-              unlockBtn.textContent = "⚡ Unlock";
-            }, 3000);
-          }
-        });
-
-        storeInstallBtn?.addEventListener("click", async () => {
-          if (!window.openSteamAPI) return;
-          addLog(`Triggering install for ${game.name} (AppID ${game.appid})...`, "info");
-          await window.openSteamAPI.launchSteamInstall(game.appid);
-        });
-
-        resultsGrid.appendChild(card);
-      });
-    } catch (err: any) {
-      if (loading) loading.classList.add("hidden");
-      addLog(`Catalog search error: ${err.message}`, "error");
-    }
-  }
-
-  storeSearchBtn?.addEventListener("click", performSearch);
-  storeSearchInput?.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") performSearch();
-  });
-
-  storeSyncCatalogBtn?.addEventListener("click", async () => {
-    if (!window.openSteamAPI) return;
-    addLog("Updating local game catalog cache...", "info");
-    const res = await window.openSteamAPI.syncCatalog();
-    addLog(`Catalog synchronized with ${res.totalGames} entries.`, res.success ? "success" : "error");
-    performSearch();
-  });
-
-  directUnlockBtn?.addEventListener("click", async () => {
-    if (!window.openSteamAPI) return;
-    const appId = directAppIdInput?.value.trim();
-    if (!appId) {
-      addLog("Please enter a valid Steam AppID.", "warn");
-      return;
-    }
-
-    addLog(`Triggering direct unlock for AppID ${appId}...`, "info");
-    try {
-      const res = await window.openSteamAPI.generateAndInstallLua(appId);
-      addLog(res.message, res.success ? "success" : "error");
-      if (directAppIdInput) directAppIdInput.value = "";
-      showGameUnlockedModal(appId, `Steam AppID ${appId}`);
-    } catch (err: any) {
-      addLog(`Direct unlock error: ${err.message}`, "error");
-    }
-  });
-
-  // Initial populate
-  performSearch();
+// 3. Search & 1-Click Game Action
+async function refreshInstalledLuas(): Promise<void> {
+  if (!window.openSteamAPI) return;
+  try {
+    const luas = await window.openSteamAPI.listInstalledLuas();
+    installedLuaSet = new Set(luas.map((f) => f.replace(".lua", "")));
+    const badge = document.getElementById("libraryBadge");
+    if (badge) badge.textContent = String(installedLuaSet.size);
+  } catch {}
 }
 
-// 5. Installed Games Library
-async function loadInstalledGames(): Promise<void> {
-  const container = document.getElementById("installedGamesList");
-  const countText = document.getElementById("libraryCountText");
-  if (!container) return;
+async function performSearch(query: string): Promise<void> {
+  const clean = query.trim();
+  currentSearchQuery = clean;
 
-  if (!window.openSteamAPI) {
-    container.innerHTML = `<div class="loading-state error">IPC API bridge unavailable.</div>`;
-    return;
+  const loading = document.getElementById("searchLoadingState");
+  const emptyState = document.getElementById("searchEmptyState");
+  const grid = document.getElementById("gamesGrid");
+  const clearBtn = document.getElementById("clearSearchBtn");
+
+  if (clearBtn) {
+    if (clean) clearBtn.classList.remove("hidden");
+    else clearBtn.classList.add("hidden");
   }
 
-  container.innerHTML = `<div class="loading-state">Scanning local Steam library folders...</div>`;
+  if (loading) loading.classList.remove("hidden");
+  if (emptyState) emptyState.classList.add("hidden");
+  if (grid) grid.innerHTML = "";
 
   try {
-    const games = await window.openSteamAPI.getInstalledGames();
-    if (countText) countText.textContent = `${games.length} games installed`;
+    const games = await window.openSteamAPI.searchCatalog(clean, 30);
+    if (loading) loading.classList.add("hidden");
 
     if (!games || games.length === 0) {
-      container.innerHTML = `<div class="loading-state">No installed Steam games detected in default library paths.</div>`;
+      if (emptyState) emptyState.classList.remove("hidden");
       return;
     }
 
-    container.innerHTML = "";
-    games.forEach((g) => {
-      const row = document.createElement("div");
-      row.className = "installed-row";
-      row.innerHTML = `
-        <div class="installed-meta">
-          <span class="installed-appid">${g.appid}</span>
-          <div>
-            <div class="installed-name">${g.name}</div>
-            <div class="installed-path">${g.installPath || "Steam/steamapps/common"}</div>
-          </div>
+    if (!grid) return;
+    grid.innerHTML = "";
+
+    games.forEach((game) => {
+      const isAlreadyAdded = installedLuaSet.has(String(game.appid));
+      const card = document.createElement("div");
+      card.className = "game-card";
+
+      const bannerUrl = `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.appid}/header.jpg`;
+
+      card.innerHTML = `
+        <div class="game-banner-box">
+          <img
+            class="game-banner"
+            src="${bannerUrl}"
+            alt="${game.name}"
+            loading="lazy"
+            onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'280\\' height=\\'140\\' viewBox=\\'0 0 280 140\\'><rect fill=\\'%23070a13\\' width=\\'280\\' height=\\'140\\'/><text fill=\\'%2364748b\\' x=\\'50%\\' y=\\'50%\\' text-anchor=\\'middle\\' font-family=\\'sans-serif\\' font-size=\\'13\\'>STEAM GAME</text></svg>'"
+          />
+          <span class="card-appid-badge">ID: ${game.appid}</span>
         </div>
-        <div style="display: flex; gap: 8px;">
-          <button class="btn btn-sky lib-install-btn" data-appid="${g.appid}">📥 Install</button>
-          <button class="btn btn-emerald lib-unlock-btn" data-appid="${g.appid}">⚡ Sync Lua</button>
+        <div class="game-body">
+          <h4 class="game-title" title="${game.name}">${game.name}</h4>
+          <button class="card-action-btn ${isAlreadyAdded ? "btn-installed" : ""}" data-appid="${game.appid}" data-name="${game.name}">
+            ${isAlreadyAdded ? "▶ Added (Launch)" : "⚡ Add Game"}
+          </button>
         </div>
       `;
 
-      row.querySelector<HTMLButtonElement>(".lib-install-btn")?.addEventListener("click", async () => {
+      const actionBtn = card.querySelector<HTMLButtonElement>(".card-action-btn");
+      actionBtn?.addEventListener("click", async () => {
         if (!window.openSteamAPI) return;
-        addLog(`Triggering Steam install for ${g.name} (AppID ${g.appid})...`, "info");
-        await window.openSteamAPI.launchSteamInstall(g.appid);
-      });
 
-      const btn = row.querySelector<HTMLButtonElement>(".lib-unlock-btn");
-      btn?.addEventListener("click", async () => {
-        if (!window.openSteamAPI) return;
-        btn.disabled = true;
-        btn.textContent = "Syncing...";
+        actionBtn.disabled = true;
+        actionBtn.classList.add("loading");
+        actionBtn.innerHTML = `<span>⏳</span> Adding...`;
+
         try {
-          const res = await window.openSteamAPI.generateAndInstallLua(g.appid);
-          addLog(res.message, res.success ? "success" : "error");
-          btn.textContent = "✔ Synced";
-          showGameUnlockedModal(g.appid, g.name);
-        } catch (err: any) {
-          addLog(`Sync error: ${err.message}`, "error");
-          btn.textContent = "Failed";
-        } finally {
+          const res = await window.openSteamAPI.oneClickInstall(game.appid, game.name);
+          actionBtn.classList.remove("loading");
+          actionBtn.classList.add("btn-installed");
+          actionBtn.innerHTML = `<span>✅</span> Done! Check Steam`;
+
+          showToast(`🎉 "${game.name}" added to Steam! Download started.`);
+          await refreshInstalledLuas();
+
           setTimeout(() => {
-            btn.disabled = false;
-            btn.textContent = "⚡ Sync Lua";
+            actionBtn.disabled = false;
+            actionBtn.innerHTML = `<span>▶</span> Added (Launch)`;
+          }, 3500);
+        } catch (err: any) {
+          actionBtn.classList.remove("loading");
+          actionBtn.innerHTML = `<span>❌</span> Failed`;
+          showToast(`Failed to add game: ${err.message}`, "error");
+          setTimeout(() => {
+            actionBtn.disabled = false;
+            actionBtn.innerHTML = isAlreadyAdded ? "▶ Added (Launch)" : "⚡ Add Game";
           }, 3000);
         }
       });
 
-      container.appendChild(row);
+      grid.appendChild(card);
     });
   } catch (err: any) {
-    container.innerHTML = `<div class="loading-state error">Failed to scan library: ${err.message}</div>`;
+    if (loading) loading.classList.add("hidden");
+    showToast(`Search error: ${err.message}`, "error");
   }
 }
 
-// 6. Manifest Manager
-async function loadInstalledLuas(): Promise<void> {
-  const container = document.getElementById("installedLuasContainer");
-  if (!container) return;
-  if (!window.openSteamAPI) return;
+function initSearch(): void {
+  const searchInput = document.getElementById("gameSearchInput") as HTMLInputElement | null;
+  const searchBtn = document.getElementById("searchSubmitBtn");
+  const clearBtn = document.getElementById("clearSearchBtn");
+
+  searchInput?.addEventListener("input", () => {
+    if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = setTimeout(() => {
+      performSearch(searchInput.value);
+    }, 350);
+  });
+
+  searchInput?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+      performSearch(searchInput.value);
+    }
+  });
+
+  searchBtn?.addEventListener("click", () => {
+    if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+    performSearch(searchInput?.value || "");
+  });
+
+  clearBtn?.addEventListener("click", () => {
+    if (searchInput) searchInput.value = "";
+    performSearch("");
+  });
+
+  // Trending Tag Pills
+  const tagPills = document.querySelectorAll<HTMLButtonElement>(".tag-pill");
+  tagPills.forEach((pill) => {
+    pill.addEventListener("click", () => {
+      const name = pill.getAttribute("data-name") || "";
+      if (searchInput) searchInput.value = name;
+      performSearch(name);
+    });
+  });
+}
+
+// 4. Library View
+async function loadLibrary(): Promise<void> {
+  const container = document.getElementById("libraryGrid");
+  const emptyState = document.getElementById("libraryEmptyState");
+  if (!container || !window.openSteamAPI) return;
+
+  container.innerHTML = "";
 
   try {
     const luas = await window.openSteamAPI.listInstalledLuas();
-    if (!luas || luas.length === 0) {
-      container.innerHTML = `<span class="text-dim">No Lua scripts currently installed in Steam plugin directory.</span>`;
+    installedLuaSet = new Set(luas.map((f) => f.replace(".lua", "")));
+
+    const badge = document.getElementById("libraryBadge");
+    if (badge) badge.textContent = String(luas.length);
+
+    if (luas.length === 0) {
+      emptyState?.classList.remove("hidden");
       return;
     }
 
-    container.innerHTML = "";
-    luas.forEach((fileName) => {
-      const appId = fileName.replace(".lua", "");
-      const tag = document.createElement("div");
-      tag.className = "lua-tag";
-      tag.style.display = "inline-flex";
-      tag.style.alignItems = "center";
-      tag.style.gap = "8px";
+    emptyState?.classList.add("hidden");
 
-      tag.innerHTML = `
-        <span style="font-weight: 700; color: #fff;">${fileName}</span>
-        <button class="btn-xs btn-emerald lua-install-btn" title="Launch Steam Install" data-appid="${appId}">📥 Install in Steam</button>
-        <button class="btn-xs lua-steps-btn" title="View Instructions" data-appid="${appId}">ℹ️ Steps</button>
-        <span class="lua-tag-del" title="Delete Lua config" data-appid="${appId}">✕</span>
+    luas.forEach((file) => {
+      const appId = file.replace(".lua", "");
+      const card = document.createElement("div");
+      card.className = "lib-card";
+
+      card.innerHTML = `
+        <div class="lib-info">
+          <span class="lib-appid-pill">${appId}</span>
+          <span class="lib-name" id="libName-${appId}">Game AppID ${appId}</span>
+        </div>
+        <div class="lib-controls">
+          <button class="btn-icon-action" data-appid="${appId}" title="Install / Run in Steam">
+            <span>📥</span> Steam
+          </button>
+          <button class="btn-del-action" data-appid="${appId}" title="Remove Game">✕</button>
+        </div>
       `;
 
-      tag.querySelector(".lua-install-btn")?.addEventListener("click", async () => {
-        if (!window.openSteamAPI) return;
-        addLog(`Triggering install for AppID ${appId}...`, "info");
+      // Launch button
+      card.querySelector(".btn-icon-action")?.addEventListener("click", async () => {
+        showToast(`Launching Steam installer for AppID ${appId}...`, "info");
         await window.openSteamAPI.launchSteamInstall(appId);
       });
 
-      tag.querySelector(".lua-steps-btn")?.addEventListener("click", () => {
-        showGameUnlockedModal(appId, `AppID ${appId}`);
-      });
-
-      tag.querySelector(".lua-tag-del")?.addEventListener("click", async () => {
-        if (!window.openSteamAPI) return;
+      // Delete button
+      card.querySelector(".btn-del-action")?.addEventListener("click", async () => {
         const ok = await window.openSteamAPI.removeLua(appId);
         if (ok) {
-          addLog(`Removed ${fileName}`, "info");
-          loadInstalledLuas();
+          showToast(`Removed AppID ${appId} from Steam config.`, "info");
+          card.remove();
+          refreshInstalledLuas();
         }
       });
 
-      container.appendChild(tag);
+      container.appendChild(card);
+
+      // Async fetch official game title
+      fetch(`https://store.steampowered.com/api/appdetails?appids=${appId}`)
+        .then((r) => r.json())
+        .then((data: any) => {
+          if (data[appId]?.success && data[appId]?.data?.name) {
+            const nameEl = document.getElementById(`libName-${appId}`);
+            if (nameEl) nameEl.textContent = data[appId].data.name;
+          }
+        })
+        .catch(() => {});
     });
   } catch (err: any) {
-    container.innerHTML = `<span class="text-dim">Error reading Luas: ${err.message}</span>`;
-  }
-}
-
-function initManifestManager(): void {
-  const batchBtn = document.getElementById("batchFixManifestsBtn");
-  const summaryBox = document.getElementById("manifestFixSummary");
-
-  batchBtn?.addEventListener("click", async () => {
-    if (!window.openSteamAPI) return;
-    if (batchBtn) (batchBtn as HTMLButtonElement).disabled = true;
-    addLog("Beginning batch manifest scan and synchronization...", "info");
-
-    try {
-      const res = await window.openSteamAPI.fixAllManifests();
-      if (summaryBox) {
-        summaryBox.classList.remove("hidden");
-        summaryBox.innerHTML = `
-          <strong>Batch Fix Complete:</strong><br>
-          • Scanned Lua scripts: ${res.scannedCount}<br>
-          • Depots verified: Active (setManifestid configured)<br>
-          • Manifests updated: ${res.luaFilesUpdated}<br>
-          <div style="margin-top: 8px; padding: 8px; background: rgba(56, 189, 248, 0.1); border-radius: 4px; color: #38bdf8;">
-            💡 <strong>Next Step:</strong> Click <strong>"📥 Install in Steam"</strong> on any script below or in the popup to trigger Steam's official installation prompt!
-          </div>
-        `;
-      }
-      addLog(`Manifest batch sync finished: ${res.luaFilesUpdated} updated.`, "success");
-      loadInstalledLuas();
-    } catch (err: any) {
-      addLog(`Batch manifest error: ${err.message}`, "error");
-    } finally {
-      if (batchBtn) (batchBtn as HTMLButtonElement).disabled = false;
-    }
-  });
-}
-
-// 7. Plugins & Millennium
-function initPlugins(): void {
-  const installMillenniumBtn = document.getElementById("installMillenniumBtn");
-  const installLuaManagerBtn = document.getElementById("installLuaManagerBtn");
-
-  installMillenniumBtn?.addEventListener("click", async () => {
-    if (!window.openSteamAPI) return;
-    addLog("Downloading Millennium installer...", "info");
-    const res = await window.openSteamAPI.installMillennium();
-    addLog(res.message, res.success ? "success" : "error");
-  });
-
-  installLuaManagerBtn?.addEventListener("click", async () => {
-    if (!window.openSteamAPI) return;
-    addLog("Downloading and installing LuaManager plugin...", "info");
-    const res = await window.openSteamAPI.installLuaManager();
-    addLog(res.message, res.success ? "success" : "error");
-  });
-}
-
-// 8. Online-Fix
-function initOnlineFix(): void {
-  const ofGameName = document.getElementById("ofGameName") as HTMLInputElement | null;
-  const ofGamePath = document.getElementById("ofGamePath") as HTMLInputElement | null;
-  const ofPassword = document.getElementById("ofPassword") as HTMLInputElement | null;
-  const ofBrowsePathBtn = document.getElementById("ofBrowsePathBtn");
-  const ofDeployBtn = document.getElementById("ofDeployBtn");
-
-  ofBrowsePathBtn?.addEventListener("click", async () => {
-    if (!window.openSteamAPI) return;
-    const dir = await window.openSteamAPI.selectDirectory();
-    if (dir && ofGamePath) {
-      ofGamePath.value = dir;
-    }
-  });
-
-  ofDeployBtn?.addEventListener("click", async () => {
-    if (!window.openSteamAPI) return;
-    const game = ofGameName?.value.trim() || "";
-    const pathVal = ofGamePath?.value.trim() || "";
-    const pass = ofPassword?.value.trim() || "online-fix.me";
-
-    if (!game) {
-      addLog("Game title is required for Online-Fix query.", "warn");
-      return;
-    }
-    if (!pathVal) {
-      addLog("Game destination path is required.", "warn");
-      return;
-    }
-
-    addLog(`Searching and applying Online-Fix for "${game}"...`, "info");
-    try {
-      const res = await window.openSteamAPI.downloadOnlineFix(game, pathVal, pass);
-      addLog(res.message, res.success ? "success" : "error");
-    } catch (err: any) {
-      addLog(`Online-Fix error: ${err.message}`, "error");
-    }
-  });
-}
-
-// 9. Manual Lua
-function initManualLua(): void {
-  const selectFileBtn = document.getElementById("selectLuaFileBtn");
-  const dropZone = document.getElementById("luaDropZone");
-
-  async function handleImport(filePath: string): Promise<void> {
-    if (!window.openSteamAPI) return;
-    addLog(`Importing manual Lua file: ${filePath}`, "info");
-    try {
-      const res = await window.openSteamAPI.importManualLua(filePath);
-      addLog(res.message, res.success ? "success" : "error");
-      loadInstalledLuas();
-    } catch (err: any) {
-      addLog(`Failed to import Lua: ${err.message}`, "error");
-    }
-  }
-
-  selectFileBtn?.addEventListener("click", async () => {
-    if (!window.openSteamAPI) return;
-    const file = await window.openSteamAPI.selectFile(["lua"]);
-    if (file) handleImport(file);
-  });
-
-  dropZone?.addEventListener("dragover", (e) => {
-    e.preventDefault();
-    dropZone.classList.add("dragover");
-  });
-
-  dropZone?.addEventListener("dragleave", () => {
-    dropZone.classList.remove("dragover");
-  });
-
-  dropZone?.addEventListener("drop", (e) => {
-    e.preventDefault();
-    dropZone.classList.remove("dragover");
-    if (e.dataTransfer && e.dataTransfer.files.length > 0) {
-      const file = e.dataTransfer.files[0];
-      if (file.name.endsWith(".lua")) {
-        const filePath = (file as any).path;
-        if (filePath) handleImport(filePath);
-      } else {
-        addLog("Only .lua files are supported.", "warn");
-      }
-    }
-  });
-}
-
-// 10. Console
-function initConsole(): void {
-  const clearBtn = document.getElementById("clearLogBtn");
-  clearBtn?.addEventListener("click", () => {
-    const container = document.getElementById("logConsoleOutput");
-    if (container) container.innerHTML = "";
-    addLog("Console log cleared.", "info");
-  });
-
-  // Listen to IPC backend logs
-  if (window.openSteamAPI?.onLog) {
-    window.openSteamAPI.onLog((data) => {
-      addLog(data.message, data.level);
-    });
+    showToast(`Error loading library: ${err.message}`, "error");
   }
 }
 
 // Bootstrap
-function bootstrap(): void {
-  console.log("[RENDERER] Bootstrapping UI...");
-  initNav();
-  initQuickActions();
-  initModal();
-  initStore();
-  initManifestManager();
-  initPlugins();
-  initOnlineFix();
-  initManualLua();
-  initConsole();
+async function bootstrap(): Promise<void> {
+  initNavigation();
+  initSearch();
+  initSettings();
 
-  document.getElementById("refreshLibraryBtn")?.addEventListener("click", loadInstalledGames);
+  await refreshInstalledLuas();
+  await checkSteamStatus();
 
-  refreshSteamInfo();
-  // Poll Steam state every 5 seconds
-  setInterval(refreshSteamInfo, 5000);
+  // Load initial popular games list
+  performSearch("");
+
+  // Periodically check Steam state
+  setInterval(checkSteamStatus, 5000);
 }
 
 if (document.readyState === "loading") {

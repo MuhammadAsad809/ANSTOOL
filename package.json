@@ -1,7 +1,7 @@
 {
   "name": "anstool-desktop",
-  "version": "1.0.0",
-  "description": "ANSTOOL - Steam Management & Optimization Desktop Application",
+  "version": "2.0.0",
+  "description": "ANSTOOL - 1-Click Steam Game Unlocker & Manager",
   "main": "dist/main/index.js",
   "scripts": {
     "build": "node scripts/build.js",

@@ -2,6 +2,10 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const electron_1 = require("electron");
 const openSteamAPI = {
+    // 1-Click Fast Install
+    oneClickInstall: (appId, gameName) => {
+        return electron_1.ipcRenderer.invoke("steam:one-click-install", appId, gameName);
+    },
     // Steam management
     getSteamPathInfo: () => {
         return electron_1.ipcRenderer.invoke("steam:get-path-info");

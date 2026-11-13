@@ -44,14 +44,15 @@ jobs:
       - name: Publish to GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.0
-          name: "ANSTOOL v1.0.0 - Official Release"
+          tag_name: v2.0.0
+          name: "ANSTOOL v2.0.0 - 1-Click Game Unlocker"
           body: |
-            ### ⚡ ANSTOOL v1.0.0 Release
-            - Added Game Unlocked Interactive Instruction Checklist & Modal
-            - Added One-Click "Install in Steam" Protocol Launcher (`steam://install/<AppID>`)
-            - Real-time Steam Hook & Process Control
-            - Fast native registry queries and manifest bindings
+            ### ⚡ ANSTOOL v2.0.0 (1-Click Instant Install Edition)
+            - 🎮 Ultra-Simple Minimalist UI: No complex buttons or confusing modes
+            - ⚡ 1-Click Install Flow: Search Game -> Click Add -> Done ✅
+            - 🛡️ Silent Auto-Hook: Automatically deploys proxy DLLs in background
+            - 🚀 Official Steam Store Search & DLC Auto-Detection
+            - 📥 Native `steam://install/<AppID>` auto-launch
           draft: false
           prerelease: false
           files: |

@@ -4,352 +4,154 @@
   <meta charset="UTF-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' https: data:; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' https: data:;">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OpenSteam Desktop</title>
+  <title>ANSTOOL - 1-Click Steam Unlocker</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="app-layout">
-    <!-- Sidebar -->
-    <aside class="sidebar">
-      <div class="brand">
-        <div class="brand-badge">⚡</div>
-        <div class="brand-meta">
-          <span class="brand-title">OPENSTEAM</span>
-          <span class="brand-version">v3.0.0 PRO</span>
+  <div class="app-container">
+    <!-- Modern Header -->
+    <header class="navbar">
+      <div class="nav-brand">
+        <span class="brand-icon">⚡</span>
+        <div class="brand-text">
+          <span class="brand-name">ANSTOOL</span>
+          <span class="brand-tag">1-CLICK STEAM UNLOCKER</span>
         </div>
       </div>
 
-      <div class="steam-status-card">
-        <div class="status-row">
-          <span class="status-label">HOOK STATUS:</span>
-          <span id="hookStatusBadge" class="badge badge-unpatched">CHECKING...</span>
-        </div>
-        <div class="status-row mt-2">
-          <span class="status-label">PROCESS:</span>
-          <span id="processStatusBadge" class="badge badge-inactive">UNKNOWN</span>
-        </div>
-      </div>
-
-      <nav class="nav-links">
-        <button class="nav-btn active" data-tab="dashboard">
-          <span class="icon">📊</span>
-          <span class="label">Dashboard</span>
+      <nav class="nav-switcher">
+        <button id="navStoreBtn" class="tab-btn active">
+          <span>🎮</span> Search & Add
         </button>
-        <button class="nav-btn" data-tab="store">
-          <span class="icon">🎮</span>
-          <span class="label">Lua Store</span>
-        </button>
-        <button class="nav-btn" data-tab="library">
-          <span class="icon">📚</span>
-          <span class="label">Installed Games</span>
-        </button>
-        <button class="nav-btn" data-tab="manifests">
-          <span class="icon">🔄</span>
-          <span class="label">Manifest Manager</span>
-        </button>
-        <button class="nav-btn" data-tab="plugins">
-          <span class="icon">🧩</span>
-          <span class="label">Plugins & Millennium</span>
-        </button>
-        <button class="nav-btn" data-tab="onlinefix">
-          <span class="icon">🌐</span>
-          <span class="label">Online-Fix Bypass</span>
-        </button>
-        <button class="nav-btn" data-tab="manual">
-          <span class="icon">📂</span>
-          <span class="label">Manual Lua</span>
-        </button>
-        <button class="nav-btn" data-tab="console">
-          <span class="icon">💻</span>
-          <span class="label">System Console</span>
+        <button id="navLibraryBtn" class="tab-btn">
+          <span>📚</span> My Library <span id="libraryBadge" class="count-pill">0</span>
         </button>
       </nav>
 
-      <div class="sidebar-footer">
-        <div class="path-display" id="sidebarSteamPath" title="Steam Installation Path">
-          Steam: Detecting...
+      <div class="nav-right">
+        <div id="steamStatusIndicator" class="status-indicator status-checking" title="Steam Client Status">
+          <span class="status-dot"></span>
+          <span id="steamStatusText">Checking Steam...</span>
         </div>
-        <button id="changePathBtn" class="btn-xs mt-1">Change Path</button>
+        <button id="openSettingsBtn" class="icon-btn" title="Settings & Steam Path">⚙️</button>
       </div>
-    </aside>
+    </header>
 
     <!-- Main Workspace -->
-    <main class="main-body">
-      <div id="ipcErrorBanner" class="ipc-error-banner hidden">
-        ⚠️ Critical Bridge Error: Electron preload IPC was not detected. Press F12 to inspect DevTools.
-      </div>
+    <main class="main-content">
+      <!-- 1. Search & Store View -->
+      <section id="viewStore" class="view-panel active">
+        <!-- Hero Search -->
+        <div class="hero-section">
+          <h1 class="hero-title">Search Game. Click Add. Done ✅</h1>
+          <p class="hero-subtitle">Ek click me game add karein. Automatic proxy hook, manifest sync aur Steam download initiation.</p>
 
-      <!-- Top Action Bar -->
-      <header class="action-bar">
-        <div class="action-bar-title" id="pageTitle">Dashboard & Operations</div>
-        <div class="quick-controls">
-          <button id="quickPatchBtn" class="btn btn-emerald">⚡ Patch Steam</button>
-          <button id="quickUnpatchBtn" class="btn btn-crimson">✕ Unpatch</button>
-          <button id="quickRestartBtn" class="btn btn-sky">⟳ Restart Steam</button>
-          <button id="quickKillBtn" class="btn btn-dark">■ Stop Steam</button>
+          <div class="search-box-wrapper">
+            <span class="search-icon">🔍</span>
+            <input
+              type="text"
+              id="gameSearchInput"
+              class="search-input"
+              placeholder="Search by game title (e.g. Black Myth: Wukong, Cyberpunk, GTA V) or Steam AppID..."
+              autocomplete="off"
+            />
+            <button id="clearSearchBtn" class="clear-btn hidden" title="Clear">✕</button>
+            <button id="searchSubmitBtn" class="btn btn-primary search-action-btn">Search</button>
+          </div>
+
+          <!-- Quick Trending Tags -->
+          <div class="trending-tags">
+            <span class="trending-label">Trending:</span>
+            <button class="tag-pill" data-appid="2358720" data-name="Black Myth: Wukong">🔥 Black Myth: Wukong</button>
+            <button class="tag-pill" data-appid="1245620" data-name="ELDEN RING">⚔️ Elden Ring</button>
+            <button class="tag-pill" data-appid="1091500" data-name="Cyberpunk 2077">🌃 Cyberpunk 2077</button>
+            <button class="tag-pill" data-appid="271590" data-name="Grand Theft Auto V">🚗 GTA V</button>
+            <button class="tag-pill" data-appid="1551360" data-name="Forza Horizon 5">🏎️ Forza Horizon 5</button>
+            <button class="tag-pill" data-appid="730" data-name="Counter-Strike 2">🎯 CS2</button>
+            <button class="tag-pill" data-appid="252490" data-name="Rust">🪵 Rust</button>
+          </div>
         </div>
-      </header>
 
-      <!-- Content Views -->
-      <div class="viewport">
-        <!-- 1. DASHBOARD -->
-        <section id="tab-dashboard" class="tab-pane active">
-          <div class="pane-header">
-            <h2>System & Hook Overview</h2>
-            <p>Control Steam process states, proxy DLL hooks, and configuration paths</p>
-          </div>
+        <!-- Search Status / Spinner -->
+        <div id="searchLoadingState" class="state-container hidden">
+          <div class="spinner"></div>
+          <p class="state-text">Searching Steam catalog...</p>
+        </div>
 
-          <div class="grid grid-cols-3 gap-4">
-            <div class="card stat-card">
-              <span class="stat-title">Steam Installation</span>
-              <span class="stat-value" id="dashSteamValid">-</span>
-              <span class="stat-sub" id="dashSteamPathText">Checking path...</span>
-            </div>
-            <div class="card stat-card">
-              <span class="stat-title">Active DLL Hooks</span>
-              <span class="stat-value text-accent" id="dashDllCount">0</span>
-              <span class="stat-sub" id="dashDllList">No injected DLLs</span>
-            </div>
-            <div class="card stat-card">
-              <span class="stat-title">Depot Cache Directory</span>
-              <span class="stat-value" id="dashDepotCount">-</span>
-              <span class="stat-sub" id="dashDepotPath">Steam/depotcache</span>
-            </div>
-          </div>
+        <div id="searchEmptyState" class="state-container hidden">
+          <span class="state-emoji">🔍</span>
+          <p class="state-text">No games found. Try searching with another name or direct numeric AppID.</p>
+        </div>
 
-          <div class="card mt-6">
-            <h3>Patch Operations</h3>
-            <p class="text-muted text-sm mt-1">Select hooking mode and deploy proxy libraries.</p>
-            <div class="patch-options-row mt-4">
-              <div class="patch-mode-box">
-                <h4>Mode 1: OpenSteamMore Injector (Default)</h4>
-                <p>Deploys latest stable proxy DLLs with full Steam hook support.</p>
-                <button id="patchMode1Btn" class="btn btn-emerald mt-3">Deploy Mode 1</button>
-              </div>
-              <div class="patch-mode-box">
-                <h4>Mode 0: OpenSteamTool Standalone</h4>
-                <p>Direct build from OpenSteamTool repository with standalone proxy DLLs.</p>
-                <button id="patchMode0Btn" class="btn btn-sky mt-3">Deploy Mode 0</button>
-              </div>
-            </div>
-          </div>
-        </section>
+        <!-- Games Grid -->
+        <div id="gamesGrid" class="games-grid">
+          <!-- Dynamically populated cards -->
+        </div>
+      </section>
 
-        <!-- 2. LUA STORE -->
-        <section id="tab-store" class="tab-pane">
-          <div class="pane-header">
-            <h2>Lua Store & Game Unlocker</h2>
-            <p>Query SteamProof API, generate unlock Lua scripts, and automatically fetch physical manifests</p>
-          </div>
-
-          <div class="search-panel">
-            <div class="search-inputs">
-              <input type="text" id="storeSearchInput" placeholder="Search by game name (e.g. Cyberpunk, Elden Ring) or enter Steam AppID..." />
-              <button id="storeSearchBtn" class="btn btn-sky">Search</button>
-              <button id="storeSyncCatalogBtn" class="btn btn-dark">Sync Catalog</button>
-            </div>
-            <div class="direct-unlock-bar mt-3">
-              <input type="number" id="directAppIdInput" placeholder="Direct Steam AppID (e.g. 1091500)" />
-              <button id="directUnlockBtn" class="btn btn-emerald">⚡ Instant Unlock & Manifest Sync</button>
-            </div>
-          </div>
-
-          <div id="catalogLoading" class="loading-state hidden">Searching and loading catalog...</div>
-          <div id="storeResultsGrid" class="game-grid mt-4">
-            <!-- Catalog Cards Injected Here -->
-          </div>
-        </section>
-
-        <!-- 3. INSTALLED GAMES -->
-        <section id="tab-library" class="tab-pane">
-          <div class="pane-header">
-            <h2>Installed Steam Games</h2>
-            <p>Scanned directly from your local Steam library folders (libraryfolders.vdf & appmanifest)</p>
-          </div>
-
-          <div class="toolbar">
-            <button id="refreshLibraryBtn" class="btn btn-sky">Scan Installed Games</button>
-            <span id="libraryCountText" class="text-muted ml-3">0 games found</span>
-          </div>
-
-          <div id="installedGamesList" class="installed-list mt-4">
-            <!-- Installed game cards -->
-          </div>
-        </section>
-
-        <!-- 4. MANIFEST MANAGER -->
-        <section id="tab-manifests" class="tab-pane">
-          <div class="pane-header">
-            <h2>Manifest Synchronizer & Lua Inspector</h2>
-            <p>Automatically verify missing depot manifests in depotcache and update all Lua configurations</p>
-          </div>
-
-          <div class="card">
-            <h3>Batch Manifest Validator</h3>
-            <p class="text-muted text-sm mt-1">
-              Scans all Lua files inside <code>config/stplug-in/</code>, determines which depot manifests are missing from <code>depotcache</code>, and queries SteamProof API to download them in batch.
-            </p>
-            <div class="mt-4">
-              <button id="batchFixManifestsBtn" class="btn btn-emerald">⚡ Scan & Fix All Manifests</button>
-            </div>
-            <div id="manifestFixSummary" class="fix-results mt-3 hidden"></div>
-          </div>
-
-          <div class="card mt-6">
-            <h3>Installed Lua Scripts</h3>
-            <p class="text-muted text-sm mt-1">Currently active game configurations in Steam plugin directory.</p>
-            <div id="installedLuasContainer" class="lua-tags-cloud mt-4">
-              <span class="text-dim">Loading installed Luas...</span>
-            </div>
-          </div>
-        </section>
-
-        <!-- 5. PLUGINS & MILLENNIUM -->
-        <section id="tab-plugins" class="tab-pane">
-          <div class="pane-header">
-            <h2>Millennium & Plugin Suite</h2>
-            <p>Automated deployment of the Millennium Steam Client Homebrew loader and LuaManager plugin</p>
-          </div>
-
-          <div class="grid grid-cols-2 gap-4">
-            <div class="card">
-              <h3>Millennium Plugin Loader</h3>
-              <p class="text-muted text-sm mt-2">
-                Millennium enables modern UI mods and client extensions directly within the Steam Desktop client.
-              </p>
-              <div class="mt-4">
-                <button id="installMillenniumBtn" class="btn btn-sky">Install Millennium</button>
-              </div>
-            </div>
-
-            <div class="card">
-              <h3>LuaManager Millennium Plugin</h3>
-              <p class="text-muted text-sm mt-2">
-                Adds a native Lua management interface directly inside the Steam UI without needing external tools.
-              </p>
-              <div class="mt-4">
-                <button id="installLuaManagerBtn" class="btn btn-emerald">Install LuaManager Plugin</button>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- 6. ONLINE-FIX BYPASS -->
-        <section id="tab-onlinefix" class="tab-pane">
-          <div class="pane-header">
-            <h2>Online-Fix Multiplayer Bypass</h2>
-            <p>Download and apply multiplayer compatibility fixes directly to your installed game directory</p>
-          </div>
-
-          <div class="card max-w-xl">
-            <div class="form-group">
-              <label for="ofGameName">Target Game Title</label>
-              <input type="text" id="ofGameName" placeholder="e.g. Lethal Company, Phasmophobia, Palworld" />
-            </div>
-
-            <div class="form-group mt-3">
-              <label for="ofGamePath">Game Root Directory</label>
-              <div class="input-with-button">
-                <input type="text" id="ofGamePath" placeholder="C:\Program Files (x86)\Steam\steamapps\common\..." />
-                <button id="ofBrowsePathBtn" class="btn btn-secondary">Browse...</button>
-              </div>
-            </div>
-
-            <div class="form-group mt-3">
-              <label for="ofPassword">Archive Password (Default: online-fix.me)</label>
-              <input type="text" id="ofPassword" value="online-fix.me" />
-            </div>
-
-            <div class="mt-4">
-              <button id="ofDeployBtn" class="btn btn-emerald">⚡ Download & Apply Online-Fix</button>
-            </div>
-          </div>
-        </section>
-
-        <!-- 7. MANUAL LUA -->
-        <section id="tab-manual" class="tab-pane">
-          <div class="pane-header">
-            <h2>Manual Lua Loader</h2>
-            <p>Import external <code>.lua</code> unlock scripts directly into your Steam plugin folder</p>
-          </div>
-
-          <div class="drop-zone" id="luaDropZone">
-            <div class="drop-icon">📂</div>
-            <h3>Select or Drop Lua File Here</h3>
-            <p class="text-muted text-sm mt-1">Supported format: *.lua</p>
-            <button id="selectLuaFileBtn" class="btn btn-sky mt-3">Choose Lua File...</button>
-          </div>
-        </section>
-
-        <!-- 8. CONSOLE -->
-        <section id="tab-console" class="tab-pane">
-          <div class="pane-header">
-            <h2>Runtime Activity Console</h2>
-            <p>Real-time audit log of all IPC calls, API sync operations, and file modifications</p>
-          </div>
-
-          <div class="terminal-container">
-            <div class="terminal-bar">
-              <span class="terminal-title">LIVE LOG STREAM</span>
-              <button id="clearLogBtn" class="btn-xs">Clear Log</button>
-            </div>
-            <div id="logConsoleOutput" class="terminal-logs">
-              <div class="log-entry info">[SYSTEM] OpenSteam Desktop Engine Ready.</div>
-            </div>
-          </div>
-        </section>
-      </div>
-    </main>
-  </div>
-
-  <!-- Game Unlocked Instructions Modal -->
-  <div id="gameUnlockedModal" class="modal-backdrop hidden">
-    <div class="modal-card">
-      <div class="modal-header">
-        <div class="modal-title-wrap">
-          <span class="modal-icon">⚡</span>
+      <!-- 2. My Library View -->
+      <section id="viewLibrary" class="view-panel">
+        <div class="library-header">
           <div>
-            <h3 id="modalGameTitle">Game Unlocked & Injected!</h3>
-            <span class="text-dim text-sm" id="modalGameAppId">AppID: -</span>
+            <h2 class="section-title">My Added Games</h2>
+            <p class="section-subtitle">Aapke unlocked games jo Steam config me active hain</p>
+          </div>
+          <button id="refreshLibraryBtn" class="btn btn-ghost">⟳ Refresh</button>
+        </div>
+
+        <div id="libraryEmptyState" class="state-container hidden">
+          <span class="state-emoji">🎮</span>
+          <p class="state-text">Abhi tak koi game add nahi hui.</p>
+          <button id="goToStoreBtn" class="btn btn-primary mt-3">Find & Add Games</button>
+        </div>
+
+        <div id="libraryGrid" class="library-grid">
+          <!-- Dynamically populated library items -->
+        </div>
+      </section>
+    </main>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal-overlay hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>⚙️ ANSTOOL Settings</h3>
+          <button id="closeSettingsBtn" class="modal-close-btn">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="settings-group">
+            <label class="settings-label">Steam Installation Directory</label>
+            <div class="path-box">
+              <span id="settingsSteamPath" class="path-text">Detecting...</span>
+              <button id="changeSteamPathBtn" class="btn btn-sm btn-ghost">Browse...</button>
+            </div>
+          </div>
+
+          <div class="settings-group mt-4">
+            <label class="settings-label">Steam Hook Status</label>
+            <div class="hook-status-row">
+              <span id="settingsHookStatus" class="hook-pill">Checking...</span>
+              <div class="hook-actions">
+                <button id="reapplyHookBtn" class="btn btn-sm btn-primary">Re-apply Hook</button>
+                <button id="unpatchBtn" class="btn btn-sm btn-danger">Remove Hook</button>
+              </div>
+            </div>
+            <p class="settings-hint">Hooks are automatically deployed when you click "Add Game". You only need to remove hooks if you want to completely clean up Steam.</p>
+          </div>
+
+          <div class="settings-group mt-4">
+            <label class="settings-label">Steam Process</label>
+            <div class="hook-actions">
+              <button id="restartSteamBtn" class="btn btn-sm btn-ghost">Restart Steam</button>
+              <button id="killSteamBtn" class="btn btn-sm btn-ghost">Stop Steam</button>
+            </div>
           </div>
         </div>
-        <button id="closeModalBtn" class="btn-xs">✕</button>
-      </div>
-
-      <div class="modal-body">
-        <div class="instruction-box">
-          <h4>📋 REQUIRED STEPS TO PLAY / INSTALL:</h4>
-          <ol class="steps-list">
-            <li>
-              <strong>1. Verify Hook Status:</strong>
-              Ensure your status badge in the top bar shows <span class="badge badge-patched">[PATCHED]</span>. If not, click <em>Patch Steam</em> first.
-            </li>
-            <li>
-              <strong>2. Restart Steam:</strong>
-              Steam must be restarted so the proxy DLL loads the newly generated Lua unlock plugin.
-              <div class="mt-2">
-                <button id="modalRestartSteamBtn" class="btn btn-sky btn-sm">⟳ Restart Steam Now</button>
-              </div>
-            </li>
-            <li>
-              <strong>3. Trigger Steam Download:</strong>
-              Because Steam does not show unpurchased games in your cloud list until installation begins, click below to open Steam's official installation prompt:
-              <div class="mt-2">
-                <button id="modalInstallSteamBtn" class="btn btn-emerald">📥 Launch Install in Steam</button>
-              </div>
-            </li>
-            <li>
-              <strong>4. Steam Library Filter:</strong>
-              In your Steam Library, click the filter icon next to the search bar and ensure it is <strong>NOT</strong> set to "Ready to play / Installed only" so all games are visible.
-            </li>
-          </ol>
-        </div>
-      </div>
-
-      <div class="modal-footer">
-        <button id="modalDoneBtn" class="btn btn-secondary">Done</button>
       </div>
     </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toastContainer" class="toast-container"></div>
   </div>
 
   <script src="renderer.js"></script>

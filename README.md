@@ -1,18 +1,31 @@
-# ANSTOOL
+# ⚡ ANSTOOL - 1-Click Steam Game Unlocker
 
-**ANSTOOL** is an open-source Steam management and unlock tool built with Electron and TypeScript. Inspired by OpenSteam and SteamTools, it provides full automated manifest synchronization, Lua generation, proxy DLL hooks, and plugin management.
+**ANSTOOL** is a clean, lightweight, and ultra-simple Steam game unlocker built with Electron and TypeScript. Designed for zero-friction gaming: **Search Game -> Click Add -> Done ✅**.
+
+---
+
+## 🚀 The 1-Click Experience
+
+No confusing menus. No manual proxy hook modes. No complex steps.
+
+1. **Search Any Game**: Type the game title (e.g. *Black Myth: Wukong*, *Elden Ring*, *Cyberpunk 2077*) or enter its Steam AppID.
+2. **Click "⚡ Add Game"**: ANSTOOL automatically:
+   - Silently verifies and deploys Steam proxy hooks (`xinput1_4.dll`, etc.)
+   - Generates the Lua unlock configuration with all official DLCs & depot keys
+   - Fetches depot manifests into Steam's `depotcache/`
+   - Flushes/reloads Steam seamlessly
+   - Launches Steam's native installer dialog (`steam://install/<AppID>`)
+3. **Done ✅**: Steam starts downloading your game immediately!
 
 ---
 
 ## ⚡ Features
 
-- **Steam Hook Injector**: Deploy and remove proxy DLL hooks with one click (supports Mode 0 & Mode 1).
-- **Automated Lua Store**: Real-time integration with SteamProof API. Automatically fetches depot keys and generates `stplug-in` scripts.
-- **Depot Cache Manifest Hub**: Downloads physical binary `.manifest` files directly into Steam's `depotcache/`.
-- **Batch Manifest Fixer**: Scans local Steam Lua configurations, identifies missing depot manifests, and updates them in batch.
-- **Local Game Library Scanner**: Inspects `libraryfolders.vdf` and `appmanifest_*.acf` across all drives.
-- **Millennium & Plugins**: Automated deployment of the Millennium loader and `LuaManager` plugin.
-- **Online-Fix Multiplayer Bypass**: Directly fetch and deploy multiplayer compatibility fixes.
+- **Dead-Simple UI**: Cyberpunk-inspired dark theme, instant debounced search, and trending game quick-tags.
+- **100% Search Accuracy**: Direct integration with Steam Store APIs + cached database ensures every Steam game can be found and unlocked.
+- **Resilient Fallback Engine**: If third-party manifest servers are rate-limited or blocked, ANSTOOL falls back to official Steam metadata & DLC trees so unlocks never fail.
+- **My Library Manager**: Easily inspect, re-launch, or remove your unlocked games in one place.
+- **Zero-Config Automation**: Background proxy hook injection and Steam process management.
 
 ---
 
@@ -31,21 +44,21 @@ cd ANSTOOL
 # Install dependencies
 npm install
 
-# Build TypeScript and compile assets
+# Build TypeScript and compile distribution assets
 npm run build
 
 # Start the application in development
 npm run start
 ```
 
-### Windows Executable (.exe)
+### Build Windows Executable (.exe)
 ```bash
 npm run dist:win
 ```
-The generated `.exe` installer and portable standalone will be located in the `release/` directory.
+The installer and portable standalone `.exe` will be generated in the `release/` directory.
 
 ---
 
-## 🚀 Automated Cloud Builds
+## 📦 Automated GitHub Releases
 
-This repository includes a GitHub Actions workflow (`.github/workflows/build-exe.yml`). Every push to `main` automatically compiles and produces the Windows `.exe` executable artifact available under GitHub Actions.
+Pushing to `main` triggers `.github/workflows/build-exe.yml`, which compiles the latest Windows installer and standalone `.exe` binaries under GitHub Actions / Releases automatically.

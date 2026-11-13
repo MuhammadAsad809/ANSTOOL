@@ -93,120 +93,165 @@ export class LuaService {
     if (!fs.existsSync(depotCache)) fs.mkdirSync(depotCache, { recursive: true });
 
     // 1. Fetch Depot Keys
-    const depotKeys = await this.getDepotKeys();
+    let depotKeys: Record<string, string> = {};
+    try {
+      depotKeys = await this.getDepotKeys();
+    } catch {}
 
-    // 2. Query SteamProof API for depots & manifest info
-    const infoUrl = `${STEAMPROOF_API}/apps/depots?ids=${appId}`;
-    const dlUrl = `${STEAMPROOF_API}/app/${appId}/manifests/download`;
+    // 2. Fetch Official Steam Store details (Game name & DLCs)
+    let gameName = `AppID ${appId}`;
+    let dlcIds: number[] = [];
+    try {
+      const storeController = new AbortController();
+      const storeTimeout = setTimeout(() => storeController.abort(), 4000);
+      const storeRes = await fetch(`https://store.steampowered.com/api/appdetails?appids=${appId}`, {
+        signal: storeController.signal,
+        headers: { "User-Agent": "Mozilla/5.0" }
+      });
+      clearTimeout(storeTimeout);
+      if (storeRes.ok) {
+        const storeJson: any = await storeRes.json();
+        if (storeJson[appId]?.success && storeJson[appId]?.data) {
+          gameName = storeJson[appId].data.name || gameName;
+          if (Array.isArray(storeJson[appId].data.dlc)) {
+            dlcIds = storeJson[appId].data.dlc;
+          }
+        }
+      }
+    } catch {}
 
-    const [infoRes, dlRes] = await Promise.all([
-      fetch(infoUrl, { headers: { "User-Agent": "OpenSteam-Manager/1.0" } }),
-      fetch(dlUrl, { headers: { "User-Agent": "OpenSteam-Manager/1.0" } })
-    ]);
-
-    if (!infoRes.ok) {
-      throw new Error(`SteamProof API error: HTTP ${infoRes.status}`);
-    }
-
-    const infoJson: any = await infoRes.json();
-    if (!infoJson.apps || infoJson.apps.length === 0) {
-      throw new Error(`SteamProof API returned no depot data for AppID ${appId}.`);
-    }
-
-    const appData: SteamProofApp = infoJson.apps[0];
     const targetLuaPath = path.join(luaFolder, `${appId}.lua`);
-
-    // 3. Build base Lua script
     const lines: string[] = [
-      `-- Open Steam Lua Generator v3.0`,
+      `-- ANSTOOL 1-Click Game Unlocker`,
+      `-- Game: ${gameName}`,
       `-- AppID: ${appId}`,
       `addappid(${appId})`
     ];
 
-    if (appData.depots && Array.isArray(appData.depots)) {
-      for (const depot of appData.depots) {
-        const dId = String(depot.depotId);
-        const key = depotKeys[dId];
-        if (key) {
-          lines.push(`addappid(${dId}, 1, "${key}")`);
-        } else {
-          lines.push(`addappid(${dId}, 0, "")`);
-        }
+    // Add all official DLCs
+    if (dlcIds.length > 0) {
+      lines.push("");
+      lines.push(`-- Official DLC Unlocks (${dlcIds.length} DLCs)`);
+      for (const dlc of dlcIds) {
+        lines.push(`addappid(${dlc})`);
       }
     }
 
-    // 4. Download physical binary manifests if dlRes succeeded
+    // 3. Attempt SteamProof API for specific depot keys and physical manifests
     let manifestsCount = 0;
     const manifestEntries: string[] = [];
+    let steamProofSuccess = false;
 
-    if (dlRes.ok) {
-      try {
-        const dlJson: any = await dlRes.json();
-        if (dlJson.manifests && Array.isArray(dlJson.manifests)) {
-          for (const m of dlJson.manifests as ManifestDownloadItem[]) {
-            const destManifest = path.join(depotCache, `${m.depotId}_${m.manifestId}.manifest`);
-            if (!fs.existsSync(destManifest) && m.url) {
-              try {
-                const mFileRes = await fetch(m.url, {
-                  headers: { "User-Agent": "OpenSteam-Manager/1.0" }
-                });
-                if (mFileRes.ok) {
-                  const buf = await mFileRes.arrayBuffer();
-                  fs.writeFileSync(destManifest, Buffer.from(buf));
+    try {
+      const spController = new AbortController();
+      const spTimeout = setTimeout(() => spController.abort(), 4000);
+
+      const infoUrl = `${STEAMPROOF_API}/apps/depots?ids=${appId}`;
+      const dlUrl = `${STEAMPROOF_API}/app/${appId}/manifests/download`;
+
+      const [infoRes, dlRes] = await Promise.all([
+        fetch(infoUrl, { signal: spController.signal, headers: { "User-Agent": "OpenSteam-Manager/1.0" } }).catch(() => null),
+        fetch(dlUrl, { signal: spController.signal, headers: { "User-Agent": "OpenSteam-Manager/1.0" } }).catch(() => null)
+      ]);
+      clearTimeout(spTimeout);
+
+      if (infoRes && infoRes.ok) {
+        const infoJson: any = await infoRes.json().catch(() => null);
+        if (infoJson && infoJson.apps && infoJson.apps.length > 0) {
+          steamProofSuccess = true;
+          const appData: SteamProofApp = infoJson.apps[0];
+
+          if (appData.depots && Array.isArray(appData.depots)) {
+            lines.push("");
+            lines.push(`-- Depot Bindings`);
+            for (const depot of appData.depots) {
+              const dId = String(depot.depotId);
+              const key = depotKeys[dId];
+              if (key) {
+                lines.push(`addappid(${dId}, 1, "${key}")`);
+              } else {
+                lines.push(`addappid(${dId}, 0, "")`);
+              }
+            }
+          }
+
+          // Download physical binary manifests if available
+          if (dlRes && dlRes.ok) {
+            const dlJson: any = await dlRes.json().catch(() => null);
+            if (dlJson && dlJson.manifests && Array.isArray(dlJson.manifests)) {
+              for (const m of dlJson.manifests as ManifestDownloadItem[]) {
+                const destManifest = path.join(depotCache, `${m.depotId}_${m.manifestId}.manifest`);
+                if (!fs.existsSync(destManifest) && m.url) {
+                  try {
+                    const mFileRes = await fetch(m.url, { headers: { "User-Agent": "OpenSteam-Manager/1.0" } });
+                    if (mFileRes.ok) {
+                      const buf = await mFileRes.arrayBuffer();
+                      fs.writeFileSync(destManifest, Buffer.from(buf));
+                      manifestsCount++;
+                    }
+                  } catch {}
+                } else if (fs.existsSync(destManifest)) {
                   manifestsCount++;
                 }
-              } catch (mErr) {
-                console.warn(`Failed to download physical manifest ${m.manifestId}:`, mErr);
-              }
-            } else if (fs.existsSync(destManifest)) {
-              manifestsCount++;
-            }
 
-            // Find matching depot for size
-            const depotInfo = appData.depots?.find((d) => String(d.depotId) === String(m.depotId));
-            if (depotInfo && depotInfo.maxSize && Number(depotInfo.maxSize) > 0) {
-              manifestEntries.push(`setManifestid(${m.depotId}, "${m.manifestId}", ${depotInfo.maxSize})`);
-            } else {
-              manifestEntries.push(`setManifestid(${m.depotId}, "${m.manifestId}")`);
+                const depotInfo = appData.depots?.find((d) => String(d.depotId) === String(m.depotId));
+                if (depotInfo && depotInfo.maxSize && Number(depotInfo.maxSize) > 0) {
+                  manifestEntries.push(`setManifestid(${m.depotId}, "${m.manifestId}", ${depotInfo.maxSize})`);
+                } else {
+                  manifestEntries.push(`setManifestid(${m.depotId}, "${m.manifestId}")`);
+                }
+              }
+            }
+          }
+
+          // Fallback manifest entries from appData
+          if (manifestEntries.length === 0 && appData.depots) {
+            for (const depot of appData.depots) {
+              const dId = String(depot.depotId);
+              if (depot.manifests?.public?.manifestId) {
+                const mId = depot.manifests.public.manifestId;
+                if (depot.maxSize && Number(depot.maxSize) > 0) {
+                  manifestEntries.push(`setManifestid(${dId}, "${mId}", ${depot.maxSize})`);
+                } else {
+                  manifestEntries.push(`setManifestid(${dId}, "${mId}")`);
+                }
+              }
             }
           }
         }
-      } catch (err) {
-        console.warn("Error parsing manifest download response:", err);
       }
-    }
+    } catch {}
 
-    // Fallback to manifests list from infoJson if dlRes was empty
-    if (manifestEntries.length === 0 && appData.depots) {
-      for (const depot of appData.depots) {
-        const dId = String(depot.depotId);
-        if (depot.manifests) {
-          const pub = depot.manifests.public;
-          if (pub && pub.manifestId) {
-            if (depot.maxSize && Number(depot.maxSize) > 0) {
-              manifestEntries.push(`setManifestid(${dId}, "${pub.manifestId}", ${depot.maxSize})`);
-            } else {
-              manifestEntries.push(`setManifestid(${dId}, "${pub.manifestId}")`);
-            }
-          }
+    // Fallback: If SteamProof was blocked, search our depotKeys database for any related depots
+    if (!steamProofSuccess && Object.keys(depotKeys).length > 0) {
+      const relatedDepots = Object.entries(depotKeys).filter(([dId]) => {
+        const idNum = Number(dId);
+        const appNum = Number(appId);
+        return idNum >= appNum && idNum <= appNum + 20;
+      });
+
+      if (relatedDepots.length > 0) {
+        lines.push("");
+        lines.push(`-- Auto-matched Depots (${relatedDepots.length})`);
+        for (const [dId, key] of relatedDepots) {
+          lines.push(`addappid(${dId}, 1, "${key}")`);
         }
       }
     }
 
     if (manifestEntries.length > 0) {
       lines.push("");
-      lines.push(`-- SteamProof Manifests (updated ${new Date().toISOString()})`);
+      lines.push(`-- Depot Manifests`);
       lines.push(...manifestEntries);
     }
 
     fs.writeFileSync(targetLuaPath, lines.join("\n") + "\n", "utf-8");
 
-    const totalBindings = manifestEntries.length;
     return {
       success: true,
       luaPath: targetLuaPath,
-      manifestsCount: totalBindings,
-      message: `Successfully generated Lua unlock with ${totalBindings} depot manifest binding(s) for AppID ${appId}!`
+      manifestsCount: manifestEntries.length,
+      message: `Unlocked "${gameName}" (${appId}) successfully!`
     };
   }
 

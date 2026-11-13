@@ -2,6 +2,11 @@ import { contextBridge, ipcRenderer } from "electron";
 import { OpenSteamAPI, SteamPathInfo, ProcessStatus, SteamGame, FixManifestsResult } from "../types/opensteam";
 
 const openSteamAPI: OpenSteamAPI = {
+  // 1-Click Fast Install
+  oneClickInstall: (appId: string | number, gameName?: string): Promise<{ success: boolean; appId: string; gameName: string; message: string }> => {
+    return ipcRenderer.invoke("steam:one-click-install", appId, gameName);
+  },
+
   // Steam management
   getSteamPathInfo: (): Promise<SteamPathInfo> => {
     return ipcRenderer.invoke("steam:get-path-info");
