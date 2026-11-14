@@ -153,14 +153,53 @@ export class SteamService {
     const platform = os.platform();
     try {
       if (platform === "win32") {
-        const { stdout } = await execAsync('tasklist /FI "IMAGENAME eq steam.exe" /NH', { timeout: 2000 });
-        const isSteamRunning = stdout.toLowerCase().includes("steam.exe");
+        let isSteamRunning = false;
+
+        // Method 1: tasklist without restrictive /FI filter (works across Wine, Winlator, Win 7/10/11)
+        try {
+          const { stdout } = await execAsync('tasklist /NH', { timeout: 4500 });
+          if (stdout && stdout.toLowerCase().includes("steam.exe")) {
+            isSteamRunning = true;
+          }
+        } catch {}
+
+        // Method 2: tasklist with /FI filter fallback
+        if (!isSteamRunning) {
+          try {
+            const { stdout } = await execAsync('tasklist /FI "IMAGENAME eq steam.exe" /NH', { timeout: 3500 });
+            if (stdout && stdout.toLowerCase().includes("steam.exe")) {
+              isSteamRunning = true;
+            }
+          } catch {}
+        }
+
+        // Method 3: wmic fallback
+        if (!isSteamRunning) {
+          try {
+            const { stdout } = await execAsync('wmic process where "name=\'steam.exe\'" get name', { timeout: 3500 });
+            if (stdout && stdout.toLowerCase().includes("steam.exe")) {
+              isSteamRunning = true;
+            }
+          } catch {}
+        }
+
+        // Method 4: steam.pid check in Steam directory
+        if (!isSteamRunning) {
+          try {
+            const steamPath = await this.getSteamPath();
+            const pidFile = path.join(steamPath, "steam.pid");
+            if (fs.existsSync(pidFile)) {
+              isSteamRunning = true;
+            }
+          } catch {}
+        }
+
         return {
           steamRunning: isSteamRunning,
           helperRunning: isSteamRunning
         };
       } else {
-        const { stdout } = await execAsync("pgrep -f steam || true", { timeout: 1500 });
+        const { stdout } = await execAsync("pgrep -f steam || true", { timeout: 2500 });
         const isRunning = stdout.trim().length > 0;
         return {
           steamRunning: isRunning,
@@ -176,8 +215,12 @@ export class SteamService {
     const platform = os.platform();
     try {
       if (platform === "win32") {
-        await execAsync("taskkill /F /IM steam.exe /T 2>nul || true");
-        await execAsync("taskkill /F /IM steamwebhelper.exe /T 2>nul || true");
+        // Standard taskkill without /T which causes errors in Wine/Winlator
+        await execAsync("taskkill /F /IM steam.exe 2>nul || true");
+        await execAsync("taskkill /F /IM steamwebhelper.exe 2>nul || true");
+        try {
+          await execAsync('wmic process where "name=\'steam.exe\'" call terminate 2>nul || true');
+        } catch {}
       } else {
         await execAsync("pkill -9 -f steam 2>/dev/null || true");
       }
@@ -261,9 +304,11 @@ export class SteamService {
     await this.killSteamProcesses();
     await new Promise((r) => setTimeout(r, 1200));
 
-    const tempDir = path.join(steamPath, "temp");
+    const tempDir = path.join(os.tmpdir(), "anstool_patch");
     if (!fs.existsSync(tempDir)) {
-      fs.mkdirSync(tempDir, { recursive: true });
+      try {
+        fs.mkdirSync(tempDir, { recursive: true });
+      } catch {}
     }
 
     const zipPath = path.join(tempDir, "inject.zip");
@@ -341,7 +386,11 @@ export class SteamService {
         const lower = filename.toLowerCase();
         if (lower.endsWith(".dll") || lower.endsWith(".json")) {
           const destFile = path.join(steamPath, filename);
-          fs.writeFileSync(destFile, entry.getData());
+          try {
+            fs.writeFileSync(destFile, entry.getData());
+          } catch (e: any) {
+            console.warn(`Could not write ${destFile}:`, e.message);
+          }
         }
       }
 

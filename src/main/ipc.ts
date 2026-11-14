@@ -25,40 +25,39 @@ export function registerAllIpcHandlers(
 
     broadcastLog(win, "info", `[1-CLICK] Initializing 1-Click Install for ${gameName || cleanAppId}...`);
 
-    // 1. Ensure Steam is found and patched
+    // 1. Ensure Steam path exists
     const pathInfo = await steamService.getSteamPathInfo();
     if (!pathInfo.exists) {
-      throw new Error(`Steam folder not found at ${pathInfo.path}. Please verify your Steam path.`);
+      throw new Error(`Steam folder not found at "${pathInfo.path}". Please set your custom Steam path in Settings.`);
     }
 
+    // 2. Terminate any running Steam instances first to unlock files & hooks
+    broadcastLog(win, "info", `[1-CLICK] Preparing Steam client for new game unlocks...`);
+    await steamService.killSteamProcesses();
+    await new Promise((r) => setTimeout(r, 1200));
+
+    // 3. Ensure proxy hooks are deployed
     if (!pathInfo.isPatched) {
-      broadcastLog(win, "info", `[1-CLICK] Steam hook not active. Automatically deploying proxy hooks...`);
+      broadcastLog(win, "info", `[1-CLICK] Deploying OpenSteamTool proxy hooks...`);
       try {
         await steamService.patchSteam(0);
-        broadcastLog(win, "success", `[1-CLICK] Steam proxy hook deployed.`);
+        broadcastLog(win, "success", `[1-CLICK] Steam proxy hook active.`);
       } catch (err: any) {
         broadcastLog(win, "warn", `[1-CLICK] Hook notice: ${err.message}`);
       }
     }
 
-    // 2. Generate and install Lua unlock + depot manifests
+    // 4. Generate and install Lua unlock + depot manifests
     broadcastLog(win, "info", `[1-CLICK] Unlocking game and binding manifests for AppID ${cleanAppId}...`);
     const luaRes = await luaService.generateAndInstallLua(cleanAppId);
     broadcastLog(win, "success", luaRes.message);
 
-    // 3. Ensure Steam is running with the proxy hook loaded
-    const proc = await steamService.getProcessStatus();
-    if (proc.steamRunning) {
-      broadcastLog(win, "info", `[1-CLICK] Restarting Steam to load new game unlocks...`);
-      await steamService.restartSteam();
-      await new Promise((r) => setTimeout(r, 4500));
-    } else {
-      broadcastLog(win, "info", `[1-CLICK] Launching Steam client with proxy hook...`);
-      await steamService.startSteam();
-      await new Promise((r) => setTimeout(r, 5500));
-    }
+    // 5. Cleanly launch Steam with hooks loaded
+    broadcastLog(win, "info", `[1-CLICK] Launching Steam with proxy hooks...`);
+    await steamService.startSteam();
+    await new Promise((r) => setTimeout(r, 6500));
 
-    // 4. Trigger Steam native download/install
+    // 6. Trigger Steam native download/install
     broadcastLog(win, "info", `[1-CLICK] Dispatched steam://install/${cleanAppId}`);
     try {
       await shell.openExternal(`steam://install/${cleanAppId}`);

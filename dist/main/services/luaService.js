@@ -118,14 +118,26 @@ class LuaService {
         const luaFolder2 = path.join(steamPath, "stplug-in");
         const luaFolder3 = path.join(steamPath, "config", "lua");
         const depotCache = path.join(steamPath, "depotcache");
-        if (!fs.existsSync(luaFolder1))
-            fs.mkdirSync(luaFolder1, { recursive: true });
-        if (!fs.existsSync(luaFolder2))
-            fs.mkdirSync(luaFolder2, { recursive: true });
-        if (!fs.existsSync(luaFolder3))
-            fs.mkdirSync(luaFolder3, { recursive: true });
-        if (!fs.existsSync(depotCache))
-            fs.mkdirSync(depotCache, { recursive: true });
+        try {
+            if (!fs.existsSync(luaFolder1))
+                fs.mkdirSync(luaFolder1, { recursive: true });
+        }
+        catch { }
+        try {
+            if (!fs.existsSync(luaFolder2))
+                fs.mkdirSync(luaFolder2, { recursive: true });
+        }
+        catch { }
+        try {
+            if (!fs.existsSync(luaFolder3))
+                fs.mkdirSync(luaFolder3, { recursive: true });
+        }
+        catch { }
+        try {
+            if (!fs.existsSync(depotCache))
+                fs.mkdirSync(depotCache, { recursive: true });
+        }
+        catch { }
         // 1. Fetch Depot Keys
         let depotKeys = {};
         try {
@@ -272,9 +284,18 @@ class LuaService {
             lines.push(...manifestEntries);
         }
         const finalContent = lines.join("\n") + "\n";
-        fs.writeFileSync(path.join(luaFolder1, `${appId}.lua`), finalContent, "utf-8");
-        fs.writeFileSync(path.join(luaFolder2, `${appId}.lua`), finalContent, "utf-8");
-        fs.writeFileSync(path.join(luaFolder3, `${appId}.lua`), finalContent, "utf-8");
+        try {
+            fs.writeFileSync(path.join(luaFolder1, `${appId}.lua`), finalContent, "utf-8");
+        }
+        catch { }
+        try {
+            fs.writeFileSync(path.join(luaFolder2, `${appId}.lua`), finalContent, "utf-8");
+        }
+        catch { }
+        try {
+            fs.writeFileSync(path.join(luaFolder3, `${appId}.lua`), finalContent, "utf-8");
+        }
+        catch { }
         return {
             success: true,
             luaPath: path.join(luaFolder1, `${appId}.lua`),
