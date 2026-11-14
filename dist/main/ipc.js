@@ -257,4 +257,13 @@ function registerAllIpcHandlers(steamService, gameService, luaService, pluginSer
         });
         return res.canceled || res.filePaths.length === 0 ? null : res.filePaths[0];
     });
+    // Window Controls
+    electron_1.ipcMain.handle("window:minimize", (event) => {
+        const win = electron_1.BrowserWindow.fromWebContents(event.sender);
+        win?.minimize();
+    });
+    electron_1.ipcMain.handle("window:close", (event) => {
+        const win = electron_1.BrowserWindow.fromWebContents(event.sender);
+        win?.close();
+    });
 }

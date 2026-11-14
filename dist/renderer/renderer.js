@@ -59,6 +59,13 @@ function initNavigation() {
     navLibraryBtn?.addEventListener("click", () => switchTo("library"));
     goToStoreBtn?.addEventListener("click", () => switchTo("store"));
     document.getElementById("refreshLibraryBtn")?.addEventListener("click", loadLibrary);
+    // Frameless Window Controls
+    document.getElementById("winMinBtn")?.addEventListener("click", () => {
+        window.openSteamAPI?.windowMinimize?.();
+    });
+    document.getElementById("winCloseBtn")?.addEventListener("click", () => {
+        window.openSteamAPI?.windowClose?.();
+    });
 }
 // 2. Steam Status & Settings
 async function checkSteamStatus() {
@@ -341,28 +348,28 @@ async function loadLibrary() {
         emptyState?.classList.add("hidden");
         items.forEach(({ appId, name }) => {
             const card = document.createElement("div");
-            card.className = "lib-card";
+            card.className = "library-item";
             card.innerHTML = `
-        <div class="lib-info">
-          <span class="lib-appid-pill">${appId}</span>
-          <span class="lib-name" id="libName-${appId}" title="${name}">${name}</span>
+        <div class="lib-item-left">
+          <span class="lib-game-name" id="libName-${appId}" title="${name}">${name}</span>
+          <span class="lib-appid-tag">AppID: ${appId}</span>
         </div>
-        <div class="lib-controls">
-          <button class="btn-icon-action" data-appid="${appId}" title="Install / Run in Steam">
-            ${SVG_ICONS.download} Steam
+        <div class="lib-item-actions">
+          <button class="btn-icon-action btn-install" data-appid="${appId}" title="Install / Run in Steam">
+            ${SVG_ICONS.download}
           </button>
-          <button class="btn-del-action" data-appid="${appId}" title="Remove Game">
+          <button class="btn-icon-action btn-delete" data-appid="${appId}" title="Remove Game">
             ${SVG_ICONS.trash}
           </button>
         </div>
       `;
             // Launch button
-            card.querySelector(".btn-icon-action")?.addEventListener("click", async () => {
+            card.querySelector(".btn-install")?.addEventListener("click", async () => {
                 showToast(`Launching Steam installer for AppID ${appId}...`, "info");
                 await window.openSteamAPI.launchSteamInstall(appId);
             });
             // Delete button
-            card.querySelector(".btn-del-action")?.addEventListener("click", async () => {
+            card.querySelector(".btn-delete")?.addEventListener("click", async () => {
                 const ok = await window.openSteamAPI.removeLua(appId);
                 if (ok) {
                     showToast(`Removed ${name} from Steam config.`, "info");

@@ -92,6 +92,10 @@ export interface OpenSteamAPI {
   selectDirectory: () => Promise<string | null>;
   selectFile: (extensions?: string[]) => Promise<string | null>;
 
+  // Window controls
+  windowMinimize?: () => Promise<void>;
+  windowClose?: () => Promise<void>;
+
   // Events
   onLog: (callback: (data: { level: "info" | "success" | "warn" | "error"; message: string }) => void) => void;
 }

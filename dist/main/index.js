@@ -49,11 +49,17 @@ const pluginService = new pluginService_1.PluginService(steamService);
 const onlineFixService = new onlineFixService_1.OnlineFixService();
 function createWindow() {
     mainWindow = new electron_1.BrowserWindow({
-        width: 1280,
-        height: 860,
-        minWidth: 960,
-        minHeight: 640,
-        backgroundColor: "#070a13",
+        width: 440,
+        height: 760,
+        minWidth: 380,
+        minHeight: 620,
+        maxWidth: 580,
+        maxHeight: 900,
+        backgroundColor: "#00000000",
+        transparent: true,
+        frame: false,
+        hasShadow: true,
+        resizable: true,
         title: "ANSTOOL - 1-Click Steam Unlocker",
         webPreferences: {
             preload: path.join(__dirname, "../preload/index.js"),

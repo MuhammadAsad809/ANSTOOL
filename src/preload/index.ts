@@ -93,6 +93,14 @@ const openSteamAPI: OpenSteamAPI = {
     return ipcRenderer.invoke("dialog:select-file", extensions);
   },
 
+  // Window controls
+  windowMinimize: (): Promise<void> => {
+    return ipcRenderer.invoke("window:minimize");
+  },
+  windowClose: (): Promise<void> => {
+    return ipcRenderer.invoke("window:close");
+  },
+
   // Events
   onLog: (callback: (data: { level: "info" | "success" | "warn" | "error"; message: string }) => void): void => {
     ipcRenderer.on("app:log", (_event, data) => {

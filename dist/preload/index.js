@@ -85,6 +85,13 @@ const openSteamAPI = {
     selectFile: (extensions) => {
         return electron_1.ipcRenderer.invoke("dialog:select-file", extensions);
     },
+    // Window controls
+    windowMinimize: () => {
+        return electron_1.ipcRenderer.invoke("window:minimize");
+    },
+    windowClose: () => {
+        return electron_1.ipcRenderer.invoke("window:close");
+    },
     // Events
     onLog: (callback) => {
         electron_1.ipcRenderer.on("app:log", (_event, data) => {

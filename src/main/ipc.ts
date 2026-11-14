@@ -290,4 +290,15 @@ export function registerAllIpcHandlers(
     });
     return res.canceled || res.filePaths.length === 0 ? null : res.filePaths[0];
   });
+
+  // Window Controls
+  ipcMain.handle("window:minimize", (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    win?.minimize();
+  });
+
+  ipcMain.handle("window:close", (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    win?.close();
+  });
 }
