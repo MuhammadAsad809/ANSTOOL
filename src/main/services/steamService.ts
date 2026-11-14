@@ -119,7 +119,11 @@ export class SteamService {
         }
       }
 
-      const isPatched = injectedFiles.length > 0;
+      const hasLoader = injectedFiles.some(
+        (f) => f === "dwmapi.dll" || f === "xinput1_4.dll" || f === "hid.dll" || f === "wtsapi32.dll"
+      );
+      const hasCore = injectedFiles.includes("OpenSteamTool.dll");
+      const isPatched = hasLoader && hasCore;
       const luaPath = path.join(steamPath, "config", this.luaFolderName);
       const depotCachePath = path.join(steamPath, "depotcache");
 
@@ -247,7 +251,7 @@ export class SteamService {
     }
   }
 
-  public async patchSteam(mode: number = 1): Promise<{ success: boolean; message: string }> {
+  public async patchSteam(mode: number = 0): Promise<{ success: boolean; message: string }> {
     const steamPath = await this.getSteamPath();
     if (!fs.existsSync(steamPath)) {
       throw new Error(`Steam directory not found at: ${steamPath}`);
@@ -255,7 +259,7 @@ export class SteamService {
 
     // Terminate Steam before writing DLL hooks to release locked handles
     await this.killSteamProcesses();
-    await new Promise((r) => setTimeout(r, 1000));
+    await new Promise((r) => setTimeout(r, 1200));
 
     const tempDir = path.join(steamPath, "temp");
     if (!fs.existsSync(tempDir)) {
@@ -267,21 +271,39 @@ export class SteamService {
     try {
       let downloadUrl = "";
       if (mode === 0) {
-        // Mode 0: OpenSteam001/OpenSteamTool latest release (-Release.zip)
-        const apiRes = await fetch("https://api.github.com/repos/OpenSteam001/OpenSteamTool/releases/latest", {
-          headers: { "User-Agent": "OpenSteamManager" }
-        });
-        if (!apiRes.ok) {
-          throw new Error(`Failed to fetch OpenSteamTool release: HTTP ${apiRes.status}`);
+        // Mode 0 (Recommended): OpenSteamTool complete hook suite (dwmapi.dll + xinput1_4.dll + OpenSteamTool.dll)
+        // Try direct release asset link first to avoid GitHub API rate limits
+        const directUrl = "https://github.com/OpenSteam001/OpenSteamTool/releases/download/1.4.8/OpenSteamTool-1.4.8-Release.zip";
+        let useDirect = false;
+
+        try {
+          const headRes = await fetch(directUrl, { method: "HEAD", headers: { "User-Agent": "Mozilla/5.0" } });
+          if (headRes.ok) {
+            downloadUrl = directUrl;
+            useDirect = true;
+          }
+        } catch {}
+
+        if (!useDirect) {
+          try {
+            const apiRes = await fetch("https://api.github.com/repos/OpenSteam001/OpenSteamTool/releases/latest", {
+              headers: { "User-Agent": "OpenSteamManager" }
+            });
+            if (apiRes.ok) {
+              const data: any = await apiRes.json();
+              const asset = data.assets?.find((a: any) =>
+                a.name && a.name.toLowerCase().endsWith("-release.zip")
+              );
+              if (asset && asset.browser_download_url) {
+                downloadUrl = asset.browser_download_url;
+              }
+            }
+          } catch {}
         }
-        const data: any = await apiRes.json();
-        const asset = data.assets?.find((a: any) =>
-          a.name && a.name.toLowerCase().endsWith("-release.zip")
-        );
-        if (!asset || !asset.browser_download_url) {
-          throw new Error("Could not find stable -Release.zip asset in OpenSteamTool release.");
+
+        if (!downloadUrl) {
+          downloadUrl = directUrl;
         }
-        downloadUrl = asset.browser_download_url;
       } else {
         // Mode 1: Abrahamqb/OpenSteamMore-Dev inject.zip
         downloadUrl = "https://github.com/Abrahamqb/OpenSteamMore-Dev/releases/latest/download/inject.zip";
@@ -291,25 +313,41 @@ export class SteamService {
         headers: { "User-Agent": "Mozilla/5.0" }
       });
       if (!fileRes.ok) {
-        throw new Error(`Failed to download patch payload: HTTP ${fileRes.status}`);
+        // Fallback to direct URL if API failed
+        if (downloadUrl !== "https://github.com/OpenSteam001/OpenSteamTool/releases/download/1.4.8/OpenSteamTool-1.4.8-Release.zip") {
+          const fbRes = await fetch("https://github.com/OpenSteam001/OpenSteamTool/releases/download/1.4.8/OpenSteamTool-1.4.8-Release.zip", {
+            headers: { "User-Agent": "Mozilla/5.0" }
+          });
+          if (fbRes.ok) {
+            const buf = await fbRes.arrayBuffer();
+            fs.writeFileSync(zipPath, Buffer.from(buf));
+          } else {
+            throw new Error(`Failed to download patch payload: HTTP ${fileRes.status}`);
+          }
+        } else {
+          throw new Error(`Failed to download patch payload: HTTP ${fileRes.status}`);
+        }
+      } else {
+        const arrayBuffer = await fileRes.arrayBuffer();
+        fs.writeFileSync(zipPath, Buffer.from(arrayBuffer));
       }
 
-      const arrayBuffer = await fileRes.arrayBuffer();
-      fs.writeFileSync(zipPath, Buffer.from(arrayBuffer));
-
-      // Extract DLL files directly into Steam directory
+      // Extract all DLL and JSON files directly into Steam directory
       const zip = new AdmZip(zipPath);
       const entries = zip.getEntries();
       for (const entry of entries) {
-        if (entry.entryName.toLowerCase().endsWith(".dll")) {
-          const destFile = path.join(steamPath, path.basename(entry.entryName));
+        if (entry.isDirectory) continue;
+        const filename = path.basename(entry.entryName);
+        const lower = filename.toLowerCase();
+        if (lower.endsWith(".dll") || lower.endsWith(".json")) {
+          const destFile = path.join(steamPath, filename);
           fs.writeFileSync(destFile, entry.getData());
         }
       }
 
       return {
         success: true,
-        message: `Steam successfully patched via Mode ${mode}! Proxy hooks are active.`
+        message: `Steam successfully patched! Proxy hooks (OpenSteamTool + Loaders) are active.`
       };
     } finally {
       try {

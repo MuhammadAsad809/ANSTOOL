@@ -34,7 +34,7 @@ export function registerAllIpcHandlers(
     if (!pathInfo.isPatched) {
       broadcastLog(win, "info", `[1-CLICK] Steam hook not active. Automatically deploying proxy hooks...`);
       try {
-        await steamService.patchSteam(1);
+        await steamService.patchSteam(0);
         broadcastLog(win, "success", `[1-CLICK] Steam proxy hook deployed.`);
       } catch (err: any) {
         broadcastLog(win, "warn", `[1-CLICK] Hook notice: ${err.message}`);
@@ -51,11 +51,11 @@ export function registerAllIpcHandlers(
     if (proc.steamRunning) {
       broadcastLog(win, "info", `[1-CLICK] Restarting Steam to load new game unlocks...`);
       await steamService.restartSteam();
-      await new Promise((r) => setTimeout(r, 3000));
+      await new Promise((r) => setTimeout(r, 4500));
     } else {
       broadcastLog(win, "info", `[1-CLICK] Launching Steam client with proxy hook...`);
       await steamService.startSteam();
-      await new Promise((r) => setTimeout(r, 4000));
+      await new Promise((r) => setTimeout(r, 5500));
     }
 
     // 4. Trigger Steam native download/install

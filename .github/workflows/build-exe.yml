@@ -29,7 +29,7 @@ jobs:
         run: npm run build
 
       - name: Build Windows Executable (.exe)
-        run: npx electron-builder --win --x64
+        run: npx electron-builder --win --x64 --ia32
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -45,14 +45,16 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v2.0.0
-          name: "ANSTOOL v2.0.0 - 1-Click Game Unlocker"
+          name: "ANSTOOL v2.0.0 - 1-Click Game Unlocker (x64 & 32-bit)"
           body: |
             ### ⚡ ANSTOOL v2.0.0 (1-Click Instant Install Edition)
-            - 🎮 Ultra-Simple Minimalist UI: No complex buttons or confusing modes
-            - ⚡ 1-Click Install Flow: Search Game -> Click Add -> Done ✅
-            - 🛡️ Silent Auto-Hook: Automatically deploys proxy DLLs in background
-            - 🚀 Official Steam Store Search & DLC Auto-Detection
-            - 📥 Native `steam://install/<AppID>` auto-launch
+            - 📦 **Dual Architecture Support**: Includes both **64-bit (x64)** and **32-bit (ia32)** Setup Installers and Portable EXEs!
+            - 🎮 **Ultra-Simple Minimalist UI**: No complex buttons or confusing modes — Search Game -> Click Add -> Done ✅
+            - 🛡️ **Hook & License Fix**: Deploys full OpenSteamTool core hook suite (`OpenSteamTool.dll`, `dwmapi.dll`, `xinput1_4.dll`), resolving the "No licenses" / Steam installation failed error!
+            - 📂 **Multi-Directory Lua Sync**: Deploys Lua unlock scripts across `config/stplug-in/`, `stplug-in/`, and `config/lua/` with depot key bindings.
+            - 🚀 **Official Steam Store Search & DLC Auto-Detection**
+            - 📥 **Native `steam://install/<AppID>` auto-launch**
+            - 🛡️ **Zero Admin Friction**: Runs as standard user without UAC prompts (`asInvoker`).
           draft: false
           prerelease: false
           files: |
